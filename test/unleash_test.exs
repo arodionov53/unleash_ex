@@ -2,6 +2,9 @@ defmodule UnleashTest do
   use ExUnit.Case
   import Mox
 
+  @feature_enabled_start [:unleash, :feature, :enabled?, :start]
+  @feature_enabled_stop [:unleash, :feature, :enabled?, :stop]
+
   describe "enabled?/2" do
     setup :start_repo
 
@@ -13,7 +16,7 @@ defmodule UnleashTest do
     test "should emit evaluation series on stop when applicable" do
       Application.delete_env(:unleash, :disable_client)
 
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
+      MetricsHandler.attach_telemetry_event(@feature_enabled_stop)
 
       refute Unleash.enabled?(:test1, true)
 
@@ -33,7 +36,7 @@ defmodule UnleashTest do
     test "should emit reason for non existent feature" do
       Application.delete_env(:unleash, :disable_client)
 
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
+      MetricsHandler.attach_telemetry_event(@feature_enabled_stop)
 
       refute Unleash.enabled?(:test_none_of_this, false)
 
@@ -82,7 +85,7 @@ defmodule UnleashTest do
     end
 
     test "should emit telemetry on start" do
-      attach_telemetry_event([:unleash, :feature, :enabled?, :start])
+      MetricsHandler.attach_telemetry_event(@feature_enabled_start)
 
       Unleash.enabled?(:test1)
 
@@ -96,7 +99,7 @@ defmodule UnleashTest do
     end
 
     test "should emit telemetry with result on stop" do
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
+      MetricsHandler.attach_telemetry_event(@feature_enabled_stop)
 
       Unleash.enabled?(:test1)
 
@@ -155,12 +158,16 @@ defmodule UnleashTest do
 
       Application.put_env(:unleash, :client, Unleash.ClientMock)
       Application.put_env(:unleash, :disable_metrics, true)
+      Application.put_env(:unleash, :disable_client, false)
       {:ok, pid} = Unleash.start(:normal, [])
 
       children = Supervisor.which_children(pid)
 
       assert Enum.any?(children, &Kernel.match?({Unleash.Repo, _, _, _}, &1))
       refute Enum.any?(children, &Kernel.match?({Unleash.Metrics, _, _, _}, &1))
+
+      Application.put_env(:unleash, :disable_metrics, false)
+      Application.put_env(:unleash, :disable_client, false)
     end
 
     test "it shouldn't start anything if the client is disabled" do
@@ -172,6 +179,9 @@ defmodule UnleashTest do
 
       refute Enum.any?(children, &Kernel.match?({Unleash.Repo, _, _, _}, &1))
       refute Enum.any?(children, &Kernel.match?({Unleash.Metrics, _, _, _}, &1))
+
+      Application.put_env(:unleash, :disable_metrics, false)
+      Application.put_env(:unleash, :disable_client, false)
     end
   end
 
@@ -182,21 +192,6 @@ defmodule UnleashTest do
 
     {:ok, _pid} = start_supervised({Unleash.Repo, state})
     :ok
-  end
-
-  defp attach_telemetry_event(event) do
-    test_pid = self()
-
-    :telemetry.attach(
-      make_ref(),
-      event,
-      fn
-        ^event, measurements, metadata, _config ->
-          send(test_pid, {:telemetry_measurements, measurements})
-          send(test_pid, {:telemetry_metadata, metadata})
-      end,
-      []
-    )
   end
 
   defp state,

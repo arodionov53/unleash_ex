@@ -6,6 +6,15 @@ defmodule Unleash.ClientTest do
   alias Unleash.Client
   alias Unleash.Config
 
+  @fetch_features_start [:unleash, :client, :fetch_features, :start]
+  @fetch_features_stop [:unleash, :client, :fetch_features, :stop]
+  @fetch_features_exception [:unleash, :client, :fetch_features, :exception]
+  @client_register_start [:unleash, :client, :register, :start]
+  @client_register_stop [:unleash, :client, :register, :stop]
+  @client_register_exception [:unleash, :client, :register, :exception]
+  @push_metrics_start [:unleash, :client, :push_metrics, :start]
+  @push_metrics_stop [:unleash, :client, :push_metrics, :stop]
+  @push_metrics_exception [:unleash, :client, :push_metrics, :exception]
   setup :set_mox_from_context
 
   setup do
@@ -35,7 +44,7 @@ defmodule Unleash.ClientTest do
       |> expect(:response_body!, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers!, fn _ -> [{"etag", "x"}] end)
 
-      attach_telemetry_event([:unleash, :client, :fetch_features, :start])
+      MetricsHandler.attach_telemetry_event(@fetch_features_start)
 
       assert {:ok, %{etag: "x", features: %Unleash.Features{}}} = Client.features()
       assert_received {:telemetry_metadata, metadata}
@@ -63,7 +72,7 @@ defmodule Unleash.ClientTest do
       |> expect(:response_body!, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers!, fn _ -> [{"etag", "x"}] end)
 
-      attach_telemetry_event([:unleash, :client, :fetch_features, :stop])
+      MetricsHandler.attach_telemetry_event(@fetch_features_stop)
 
       assert {:ok, %{etag: "x", features: %Unleash.Features{}}} = Client.features()
 
@@ -87,9 +96,13 @@ defmodule Unleash.ClientTest do
       |> expect(:response_body!, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers!, fn _ -> [{"etag", "x"}] end)
 
-      attach_telemetry_event([:unleash, :client, :fetch_features, :stop])
+      MetricsHandler.attach_telemetry_event(@fetch_features_stop)
       assert {:error, "{\"version\": \"2\", \"features\":[]}"} = Client.features()
       assert_received {:telemetry_metadata, metadata}
+      assert %{
+        http_response_status: 404,
+        url: "/client/features"
+      } = metadata
     end
 
     test "publishes exception event" do
@@ -98,7 +111,7 @@ defmodule Unleash.ClientTest do
         raise "Unexpected error"
       end)
 
-      attach_telemetry_event([:unleash, :client, :fetch_features, :exception])
+      MetricsHandler.attach_telemetry_event(@fetch_features_exception)
 
       assert_raise RuntimeError, fn -> Client.features() end
 
@@ -128,7 +141,7 @@ defmodule Unleash.ClientTest do
       |> expect(:response_body!, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers!, fn _ -> [{"etag", "x"}] end)
 
-      attach_telemetry_event([:unleash, :client, :register, :start])
+      MetricsHandler.attach_telemetry_event(@client_register_start)
 
       assert {:ok, %{"features" => [], "version" => "2"}} = Client.register_client()
 
@@ -153,7 +166,7 @@ defmodule Unleash.ClientTest do
       |> expect(:status_code!, fn _ -> 200 end)
       |> expect(:response_body!, fn _ -> ~S({"version": "2", "features":[]}) end)
 
-      attach_telemetry_event([:unleash, :client, :register, :stop])
+      MetricsHandler.attach_telemetry_event(@client_register_stop)
 
       assert {:ok, %{"features" => [], "version" => "2"}} = Client.register_client()
 
@@ -180,7 +193,7 @@ defmodule Unleash.ClientTest do
       |> expect(:status_code!, fn _ -> 503 end)
       |> expect(:response_body!, fn _ -> ~S() end)
 
-      attach_telemetry_event([:unleash, :client, :register, :stop])
+      MetricsHandler.attach_telemetry_event(@client_register_stop)
 
       assert {:error, ""} = Client.register_client()
 
@@ -194,7 +207,7 @@ defmodule Unleash.ClientTest do
         raise "Unexpected error"
       end)
 
-      attach_telemetry_event([:unleash, :client, :register, :exception])
+      MetricsHandler.attach_telemetry_event(@client_register_exception)
 
       assert_raise RuntimeError, fn -> Client.register_client() end
 
@@ -224,7 +237,7 @@ defmodule Unleash.ClientTest do
       end)
       |> expect(:status_code!, fn _ -> 200 end)
 
-      attach_telemetry_event([:unleash, :client, :push_metrics, :start])
+      MetricsHandler.attach_telemetry_event(@push_metrics_start)
 
       payload = %{
         bucket: %{
@@ -256,7 +269,7 @@ defmodule Unleash.ClientTest do
       end)
       |> expect(:status_code!, fn _ -> 200 end)
 
-      attach_telemetry_event([:unleash, :client, :push_metrics, :stop])
+      MetricsHandler.attach_telemetry_event(@push_metrics_stop)
 
       assert {:ok, %SimpleHttp.Response{}} = Client.metrics(%{})
 
@@ -277,7 +290,7 @@ defmodule Unleash.ClientTest do
       end)
       |> expect(:status_code!, fn _ -> 503 end)
 
-      attach_telemetry_event([:unleash, :client, :push_metrics, :stop])
+      MetricsHandler.attach_telemetry_event(@push_metrics_stop)
 
       assert {:error, %SimpleHttp.Response{status: 503}} = Client.metrics(%{})
 
@@ -291,7 +304,7 @@ defmodule Unleash.ClientTest do
         raise "Unexpected error"
       end)
 
-      attach_telemetry_event([:unleash, :client, :push_metrics, :exception])
+      MetricsHandler.attach_telemetry_event(@push_metrics_exception)
 
       assert_raise RuntimeError, fn -> Client.metrics(%{}) end
 
@@ -307,20 +320,5 @@ defmodule Unleash.ClientTest do
       assert is_list(metadata[:stacktrace])
       assert %RuntimeError{} = metadata[:reason]
     end
-  end
-
-  defp attach_telemetry_event(event) do
-    test_pid = self()
-
-    :telemetry.attach(
-      make_ref(),
-      event,
-      fn
-        ^event, measurements, metadata, _config ->
-          send(test_pid, {:telemetry_measurements, measurements})
-          send(test_pid, {:telemetry_metadata, metadata})
-      end,
-      []
-    )
   end
 end

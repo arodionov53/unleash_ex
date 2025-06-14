@@ -58,7 +58,7 @@ defmodule Unleash.MixProject do
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:expublish, "~> 2.7", only: :dev, runtime: false},
       {:junit_formatter, "~> 3.0", only: :test},
-      {:stream_data, "~> 0.6", only: [:test, :dev]},
+      {:stream_data, "~> 1.2.0", only: [:test, :dev]},
       {:excoveralls, "~> 0.16", only: :test},
       {:mox, "~> 1.1", only: :test},
       {:recase, "~> 0.7"},

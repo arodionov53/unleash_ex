@@ -1,6 +1,9 @@
 defmodule Unleash.VariantTest do
   use ExUnit.Case
 
+  @variant_get_start_event [:unleash, :variant, :get, :start]
+  @variant_get_stop_event [:unleash, :variant, :get, :stop]
+
   setup :start_repo
 
   test "return a disabled variant if the flag is disabled" do
@@ -26,7 +29,7 @@ defmodule Unleash.VariantTest do
 
   describe "get_variant telemetry" do
     test "emits telemetry on start" do
-      attach_telemetry_event([:unleash, :variant, :get, :start])
+      MetricsHandler.attach_telemetry_event(@variant_get_start_event)
 
       Unleash.get_variant(:disabled_variant)
 
@@ -40,7 +43,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "emits telemetry with reason (flag without variants) on stop" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:flag_without_variants)
 
@@ -55,7 +58,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "emits telemetry with reason (inexistent featureflag) on stop" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:inexistent_feature_flag)
 
@@ -70,7 +73,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "emits telemetry with reason (disabled_variant) on stop" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:disabled_variant)
 
@@ -85,7 +88,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "emits weight selection reason on stop when applicable" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:weight_test)
 
@@ -100,7 +103,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "emits override selection reason on stop when applicable" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:override_test, %{user_id: "420"})
 
@@ -115,7 +118,7 @@ defmodule Unleash.VariantTest do
     end
 
     test "returns seed and variants on stop" do
-      attach_telemetry_event([:unleash, :variant, :get, :stop])
+      MetricsHandler.attach_telemetry_event(@variant_get_stop_event)
 
       Unleash.get_variant(:weight_test)
 
@@ -137,21 +140,6 @@ defmodule Unleash.VariantTest do
 
     {:ok, _pid} = start_supervised({Unleash.Repo, state})
     :ok
-  end
-
-  defp attach_telemetry_event(event) do
-    test_pid = self()
-
-    :telemetry.attach(
-      make_ref(),
-      event,
-      fn
-        ^event, measurements, metadata, _config ->
-          send(test_pid, {:telemetry_measurements, measurements})
-          send(test_pid, {:telemetry_metadata, metadata})
-      end,
-      []
-    )
   end
 
   defp state,

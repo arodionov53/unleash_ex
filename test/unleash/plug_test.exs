@@ -78,29 +78,27 @@ defmodule Unleash.PlugTest do
           |> Plug.call(@opts)
 
         assert %{
-                 user_id: user_id,
-                 session_id: session_id,
+                 user_id: ^user_id,
+                 session_id: ^session_id,
                  remote_address: "127.0.0.1"
                } = conn.assigns[:unleash_context]
       end
     end
 
     property "follows options passed into the plug" do
-      check all session <- atom(:alphanumeric),
-                user <- atom(:alphanumeric),
-                opts = Plug.init(user_id: user, session_id: session),
-                session_id <- binary(),
-                user_id <- binary() do
+      check all session_id <- binary(min_length: 1),
+                user_id <- binary(min_length: 1, max_length: 100) do
         conn = conn(:get, "/")
 
+        opts = Plug.init(user_id: "user_id", session_id: "session_id")
         conn =
           conn
           |> init_test_session(%{user_id: user_id, session_id: session_id})
           |> Plug.call(opts)
 
         assert %{
-                 user_id: user_id,
-                 session_id: session_id,
+                 user_id: ^user_id,
+                 session_id: ^session_id,
                  remote_address: "127.0.0.1"
                } = conn.assigns[:unleash_context]
       end

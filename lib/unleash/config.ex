@@ -29,7 +29,7 @@ defmodule Unleash.Config do
 
   @app Application.get_application(__MODULE__)
 
-  @http_client Application.compile_env(@app, :http_client, @defaults[:http_client])
+  #@http_client Application.compile_env(@app, :http_client, @defaults[:http_client])
   @app_name Application.compile_env(@app, :appname, @defaults[:appname])
   @instance_id Application.compile_env(@app, :instance_id, @defaults[:instance_id])
 
@@ -78,7 +78,7 @@ defmodule Unleash.Config do
   if Mix.env() in [:test] do
     def http_client, do: application_env(:http_client)
   else
-    def http_client, do: @http_client
+    def http_client, do: Application.compile_env(@app, :http_client, @defaults[:http_client])
   end
 
   def telemetry_metadata, do: @telemetry_metadata
