@@ -11,7 +11,7 @@ defmodule Unleash.Http.SimpleHttp.Behavior do
         }
   @callback get(String.t(), headers) :: {:ok, response} | no_return
   @callback post(String.t(), headers, String.t()) :: {:ok, response} | no_return
-  @callback status_code!(response) :: pos_integer
-  @callback response_headers!(response) :: headers
-  @callback response_body!(response) :: String.t()
+  @callback status_code(response) :: pos_integer
+  @callback response_headers(response) :: headers
+  @callback response_body(response) :: String.t()
 end

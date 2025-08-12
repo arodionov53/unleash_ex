@@ -135,6 +135,8 @@ defmodule UnleashTest do
     test "it should listen to configuration when starting the supervisor tree" do
       Unleash.ClientMock
       |> expect(:register_client, fn -> {:ok, %{}} end)
+      |> expect(:register_client, fn -> {:ok, %{}} end)
+      |> expect(:register_client, fn -> {:ok, %{}} end)
       |> stub(:features, fn _ -> {:ok, %{etag: "test_etag", features: %Unleash.Features{}}} end)
       |> stub(:metrics, fn _ -> {:ok, %SimpleHttp.Response{}} end)
 
@@ -150,6 +152,8 @@ defmodule UnleashTest do
 
     test "it shouldn't start the metrics server if disabled" do
       Unleash.ClientMock
+      |> expect(:register_client, fn -> {:ok, %{}} end)
+      |> expect(:register_client, fn -> {:ok, %{}} end)
       |> expect(:register_client, fn -> {:ok, %{}} end)
       |> stub(:features, fn _ -> {:ok, %{etag: "test_etag", features: %Unleash.Features{}}} end)
 
