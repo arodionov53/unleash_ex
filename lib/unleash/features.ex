@@ -27,6 +27,13 @@ defmodule Unleash.Features do
 
   def from_map(_), do: {:error, "failed to construct state"}
 
+  def from_list!(features, version \\ 2) do
+    %__MODULE__{
+      version: version,
+      features: features
+    }
+  end
+
   def get_feature(nil, _feat), do: nil
 
   def get_feature(%__MODULE__{features: nil}, _feature), do: nil

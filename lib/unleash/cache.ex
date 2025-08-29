@@ -4,8 +4,10 @@ defmodule Unleash.Cache do
   threads to read the feature flag values concurrently on top of minimizing
   network calls
   """
+  alias Unleash.Config
 
   @cache_table_name :unleash_cache
+  @dets_table_name :unleash_dets_cache
 
   def cache_table_name, do: @cache_table_name
 
@@ -14,6 +16,7 @@ defmodule Unleash.Cache do
   """
   def init(existing_features \\ [], table_name \\ @cache_table_name) do
     :ets.new(table_name, [:named_table, read_concurrency: true])
+    {:ok, _pid} = :dets.open_file(@dets_table_name, file: Config.dets_file())
 
     upsert_features(existing_features, table_name)
   end
@@ -60,12 +63,24 @@ defmodule Unleash.Cache do
 
   This will clear the existing peristed features to prevent stale reads
   """
-  def upsert_features(features, table_name \\ @cache_table_name) do
+  def upsert_features(features, table_name \\ @cache_table_name)
+
+  def upsert_features([], table_name) do
+    if :dets.is_dets_file(Config.dets_file()) do
+      :ets.delete_all_objects(table_name)
+      :ets.from_dets(table_name, @dets_table_name)
+    end
+  end
+
+  def upsert_features(features, table_name) do
     :ets.delete_all_objects(table_name)
 
     Enum.each(features, fn feature ->
       upsert_feature(feature.name, feature, table_name)
     end)
+
+    :ok = :dets.delete_all_objects(@dets_table_name)
+    :ok = :dets.from_ets(@dets_table_name, table_name)
   end
 
   defp upsert_feature(name, value, table_name) when is_binary(name) do
@@ -74,5 +89,15 @@ defmodule Unleash.Cache do
 
   defp upsert_feature(name, value, table_name) when is_atom(name) do
     upsert_feature(Atom.to_string(name), value, table_name)
+  end
+
+  def dets_file_exists? do
+    :dets.is_dets_file(Config.dets_file())
+  end
+
+  def read_features_from_dets(table_name \\ @cache_table_name) do
+    :ets.delete_all_objects(table_name)
+    :ets.from_dets(table_name, @dets_table_name)
+    get_features(table_name)
   end
 end
