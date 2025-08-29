@@ -7,6 +7,12 @@ defmodule Unleash.Strategy.Constraint do
   These constraints allow for very complex and specifc strategies to be
   enacted by allowing users to specify context values to include or exclude.
   """
+  alias Unleash.Config
+
+  def from_map(map), do: from_map(map, Config.constraint_precompilation())
+
+  def from_map(map, true), do: op_compile(map)
+  def from_map(map, _), do: map
 
   def verify_all(constraints, context) do
     Enum.all?(constraints, &verify(&1, context))
@@ -24,67 +30,6 @@ defmodule Unleash.Strategy.Constraint do
 
   defp verify(%{}, _context), do: false
 
-  defp check(nil, _, _), do: false
-
-  defp check(value, "IN", %{"values" => values}), do: value in values
-  defp check(value, "NOT_IN", %{"values" => values}), do: value not in values
-
-  defp check(daytime, "DATE_AFTER", %{"value" => value}),
-    do: daytime |> compare_dates(value) == :gt
-
-  defp check(daytime, "DATE_BEFORE", %{"value" => value}),
-    do: daytime |> compare_dates(value) == :lt
-
-  defp check(str, "STR_CONTAINS", %{"values" => values}),
-    do: str |> String.contains?(values)
-
-  defp check(str, "STR_STARTS_WITH", %{"values" => values}),
-    do: str |> String.starts_with?(values)
-
-  defp check(str, "STR_ENDS_WITH", %{"values" => values}),
-    do: str |> String.ends_with?(values)
-
-  defp check(numb, "NUM_EQ", %{"value" => value}) do
-    case to_numbers(numb, value) do
-      :error -> false
-      {n, m} -> n == m
-    end
-  end
-
-  defp check(numb, "NUM_GT", %{"value" => value}) do
-    case to_numbers(numb, value) do
-      :error -> false
-      {n, m} -> n > m
-    end
-  end
-
-  defp check(numb, "NUM_GTE", %{"value" => value}) do
-    case to_numbers(numb, value) do
-      :error -> false
-      {n, m} -> n >= m
-    end
-  end
-
-  defp check(numb, "NUM_LE", %{"value" => value}) do
-    case to_numbers(numb, value) do
-      :error -> false
-      {n, m} -> n < m
-    end
-  end
-
-  defp check(numb, "NUM_LTE", %{"value" => value}) do
-    case to_numbers(numb, value) do
-      :error -> false
-      {n, m} -> n <= m
-    end
-  end
-
-  defp check(semver, "SEMVER_EQ", %{"value" => value}),
-    do: cmp_semver(semver, value, &Kernel.==/2)
-
-  defp check(semver, "SEMVER_GT", %{"value" => value}), do: cmp_semver(semver, value, &Kernel.>/2)
-  defp check(semver, "SEMVER_LT", %{"value" => value}), do: cmp_semver(semver, value, &Kernel.</2)
-
   defp find_value(nil, _name), do: nil
 
   defp find_value(ctx, name) do
@@ -97,6 +42,192 @@ defmodule Unleash.Strategy.Constraint do
 
   defp invert(result, true), do: !result
   defp invert(result, _), do: result
+
+  # ---------------------------------------------------------------------------------------------
+  # Runtime constarint checks
+  # ---------------------------------------------------------------------------------------------
+
+  def check(nil, _, _), do: false
+
+  def check(value, f, _) when is_function(f), do: f.(value)
+
+  def check(value, "IN", %{"values" => values}), do: value in values
+  def check(value, "NOT_IN", %{"values" => values}), do: value not in values
+
+  def check(daytime, "DATE_AFTER", %{"value" => value}),
+    do: daytime |> compare_dates(value) == :gt
+
+  def check(daytime, "DATE_BEFORE", %{"value" => value}),
+    do: daytime |> compare_dates(value) == :lt
+
+  def check(str, "STR_CONTAINS", %{"values" => values, "caseInsensitive" => true}),
+    do: str |> String.downcase() |> String.contains?(values |> Enum.map(&String.downcase/1))
+
+  def check(str, "STR_CONTAINS", %{"values" => values}),
+    do: str |> String.contains?(values)
+
+  def check(str, "STR_STARTS_WITH", %{"values" => values, "caseInsensitive" => true}),
+    do: str |> String.downcase() |> String.starts_with?(values |> Enum.map(&String.downcase/1))
+
+  def check(str, "STR_STARTS_WITH", %{"values" => values}),
+    do: str |> String.starts_with?(values)
+
+  def check(str, "STR_ENDS_WITH", %{"values" => values, "caseInsensitive" => true}),
+    do: str |> String.downcase() |> String.ends_with?(values |> Enum.map(&String.downcase/1))
+
+  def check(str, "STR_ENDS_WITH", %{"values" => values}),
+    do: str |> String.ends_with?(values)
+
+  def check(numb, "NUM_EQ", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n == m
+    end
+  end
+
+  def check(numb, "NUM_NEQ", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n != m
+    end
+  end
+
+  def check(numb, "NUM_GT", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n > m
+    end
+  end
+
+  def check(numb, "NUM_GTE", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n >= m
+    end
+  end
+
+  def check(numb, "NUM_LE", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n < m
+    end
+  end
+
+  def check(numb, "NUM_LTE", %{"value" => value}) do
+    case to_numbers(numb, value) do
+      :error -> false
+      {n, m} -> n <= m
+    end
+  end
+
+  def check(semver, "SEMVER_EQ", %{"value" => value}), do: cmp_semver(semver, value, &Kernel.==/2)
+  def check(semver, "SEMVER_GT", %{"value" => value}), do: cmp_semver(semver, value, &Kernel.>/2)
+  def check(semver, "SEMVER_LT", %{"value" => value}), do: cmp_semver(semver, value, &Kernel.</2)
+
+  # ---------------------------------------------------------------------------------------------
+  # Constraint compilation
+  # ---------------------------------------------------------------------------------------------
+
+  def op_compile(map) do
+    {_, new_map} =
+      Map.get_and_update(map, "operator", fn op ->
+        {op, op_comp(op, map)}
+      end)
+
+    new_map
+  end
+
+  defp op_comp("IN", %{"values" => values}), do: fn x -> x in values end
+  defp op_comp("NOT_IN", %{"values" => values}), do: fn x -> x not in values end
+
+  defp op_comp("DATE_AFTER", %{"value" => value}) do
+    dt = day_adapter(value)
+    fn daytime -> daytime |> day_adapter |> day_cpm(dt) == :gt end
+  end
+
+  defp op_comp("DATE_BEFORE", %{"value" => value}) do
+    dt = day_adapter(value)
+    fn daytime -> daytime |> day_adapter |> day_cpm(dt) == :lt end
+  end
+
+  defp op_comp("STR_CONTAINS", %{"values" => values, "caseInsensitive" => true}) do
+    pat = :binary.compile_pattern(values |> Enum.map(&String.downcase/1))
+    fn str -> str |> String.downcase() |> String.contains?(pat) end
+  end
+
+  defp op_comp("STR_CONTAINS", %{"values" => values}) do
+    pat = :binary.compile_pattern(values)
+    fn str -> str |> String.contains?(pat) end
+  end
+
+  defp op_comp("STR_STARTS_WITH", %{"values" => values, "caseInsensitive" => true}) do
+    pat = values |> Enum.map(&String.downcase/1)
+    fn str -> str |> String.downcase() |> String.starts_with?(pat) end
+  end
+
+  defp op_comp("STR_STARTS_WITH", %{"values" => values}) do
+    fn str -> str |> String.starts_with?(values) end
+  end
+
+  defp op_comp("STR_ENDS_WITH", %{"values" => values, "caseInsensitive" => true}) do
+    pat = values |> Enum.map(&String.downcase/1)
+    fn str -> str |> String.downcase() |> String.ends_with?(pat) end
+  end
+
+  defp op_comp("STR_ENDS_WITH", %{"values" => values}) do
+    fn str -> str |> String.ends_with?(values) end
+  end
+
+  defp op_comp("NUM_EQ", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x == y end
+  end
+
+  defp op_comp("NUM_NEQ", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x != y end
+  end
+
+  defp op_comp("NUM_GT", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x > y end
+  end
+
+  defp op_comp("NUM_GTE", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x >= y end
+  end
+
+  defp op_comp("NUM_LE", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x < y end
+  end
+
+  defp op_comp("NUM_LTE", %{"value" => value}) do
+    y = to_number(value)
+    fn x -> x <= y end
+  end
+
+  defp op_comp("SEMVER_EQ", %{"value" => value}) do
+    v2 = mk_semver(value)
+    fn v1 -> mk_semver(v1) == v2 end
+  end
+
+  defp op_comp("SEMVER_GT", %{"value" => value}) do
+    v2 = mk_semver(value)
+    fn v1 -> mk_semver(v1) > v2 end
+  end
+
+  defp op_comp("SEMVER_LT", %{"value" => value}) do
+    v2 = mk_semver(value)
+    fn v1 -> mk_semver(v1) < v2 end
+  end
+
+  defp op_comp(op, _), do: op
+
+  # ---------------------------------------------------------------------------------------------
+  # Helpers
+  # ---------------------------------------------------------------------------------------------
 
   defp compare_dates(d1, d2), do: day_adapter(d1) |> day_cpm(day_adapter(d2))
 

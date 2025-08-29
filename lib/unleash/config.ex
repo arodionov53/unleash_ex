@@ -10,6 +10,7 @@ defmodule Unleash.Config do
     features_period: 15 * 1000,
     strategies: Unleash.Strategies,
     backup_file: nil,
+    dets_file: nil,
     custom_http_headers: [],
     disable_client: false,
     disable_metrics: false,
@@ -27,6 +28,7 @@ defmodule Unleash.Config do
     persisten_term_key: :unleash_client_ready,
     registration_attempts: 5,
     registration_attempts_interval: 5000,
+    constraint_precompilation: true,
     app_env: :test
   }
 
@@ -61,6 +63,15 @@ defmodule Unleash.Config do
     end
   end
 
+  def dets_file do
+    application_env(:dets_backup_file)
+    |> case do
+      nil -> Path.join([System.tmp_dir!(), appname(), "unleash_repo.dets"])
+      f -> f
+    end
+    |> String.to_charlist()
+  end
+
   def backup_dir, do: backup_file() |> Path.dirname()
 
   def custom_headers, do: application_env(:custom_http_headers)
@@ -72,6 +83,8 @@ defmodule Unleash.Config do
   def retries, do: application_env(:retries)
 
   def client, do: application_env(:client)
+
+  def constraint_precompilation, do: application_env(:constraint_precompilation)
 
   def http_opts, do: application_env(:http_opts)
 

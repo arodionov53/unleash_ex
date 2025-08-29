@@ -67,7 +67,8 @@ defmodule Unleash.MixProject do
       {:telemetry, "~> 1.1"},
       {:plug, "~> 1.8", optional: true},
       {:phoenix_gon, "~> 0.4.0", optional: true},
-      {:finch, "~> 0.20.0"}
+      {:finch, "~> 0.20.0"},
+      {:benchee, "~> 1.0", only: :dev}
     ]
   end
 

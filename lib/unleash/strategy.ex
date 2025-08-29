@@ -28,7 +28,12 @@ defmodule Unleash.Strategy do
         {parameters, parameters || %{}}
       end)
 
-    new_map2
+    {_, new_map3} =
+      Map.get_and_update(new_map2, "constraints", fn constraints ->
+        {constraints, Enum.map(constraints || [], &Constraint.from_map/1)}
+      end)
+
+    new_map3
   end
 
   defmacro __using__(opts) do

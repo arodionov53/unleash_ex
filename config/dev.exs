@@ -10,4 +10,6 @@ config :unleash,
   },
   url: "http://localhost:4242/api/",
   app_env: :dev,
-  appname: "unleash_test"
+  appname: "unleash_test",
+  dets_backup_file: "/tmp/unleash_repo.dets",
+  constraint_precompilation: true

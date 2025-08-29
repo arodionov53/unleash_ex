@@ -83,8 +83,7 @@ defmodule Unleash.ClientTest do
       |> expect(:get, fn _url, _headers ->
         {:error, %SimpleHttp.Response{}}
       end)
-      |> expect(:status_code, fn _ -> 404 end)
-      |> expect(:status_code, fn _ -> 404 end)
+      |> expect(:status_code, 2, fn _ -> 404 end)
       |> expect(:response_body, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers, fn _ -> [{"etag", "x"}] end)
 
@@ -124,8 +123,7 @@ defmodule Unleash.ClientTest do
       |> expect(:post, fn _url, _body, _headers ->
         {:ok, %SimpleHttp.Response{status: 200}}
       end)
-      |> expect(:status_code, fn _ -> 200 end)
-      |> expect(:status_code, fn _ -> 200 end)
+      |> expect(:status_code, 2, fn _ -> 200 end)
       |> expect(:response_body, fn _ -> ~S({"version": "2", "features":[]}) end)
       |> expect(:response_headers, fn _ -> [{"etag", "x"}] end)
 
@@ -150,8 +148,7 @@ defmodule Unleash.ClientTest do
       |> expect(:post, fn _url, _body, _headers ->
         {:ok, %SimpleHttp.Response{status: 200}}
       end)
-      |> expect(:status_code, fn _ -> 200 end)
-      |> expect(:status_code, fn _ -> 200 end)
+      |> expect(:status_code, 2, fn _ -> 200 end)
       |> expect(:response_body, fn _ -> ~S({"version": "2", "features":[]}) end)
 
       attach_telemetry_event([:unleash, :client, :register, :stop])
