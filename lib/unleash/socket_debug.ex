@@ -4,7 +4,56 @@ defmodule Unleash.SocketDebug do
   from httpc sessions to investigate hanging connections.
   """
 
+  @version "1.2.0"
+
   require Logger
+
+  @doc """
+  Returns the current version of the SocketDebug module.
+
+  ## Examples
+
+      iex> Unleash.SocketDebug.version()
+      "1.2.0"
+  """
+  def version, do: @version
+
+  @doc """
+  Returns comprehensive version and capability information.
+
+  ## Examples
+
+      iex> info = Unleash.SocketDebug.version_info()
+      iex> info.version
+      "1.2.0"
+      iex> length(info.capabilities)
+      7
+  """
+  def version_info do
+    %{
+      version: @version,
+      module: __MODULE__,
+      capabilities: [
+        :httpc_debugging,
+        :ssl_connections,
+        :socket_monitoring,
+        :connection_health,
+        :hanging_detection,
+        :inet_socket_info,
+        :ssl_socket_examples
+      ],
+      features: %{
+        session_extraction: "Extract session info from httpc tuples",
+        socket_reference_extraction: "Support for SSL, TCP, and port references",
+        inet_functions: "Socket stats, options, addresses, health checks",
+        ssl_support: "SSL/TLS connection information and examples",
+        monitoring: "Real-time socket monitoring with configurable duration",
+        hanging_detection: "Automatic detection of problematic connections"
+      },
+      erlang_otp_version: System.otp_release(),
+      elixir_version: System.version()
+    }
+  end
 
   @doc """
   Extract all socket information from httpc sessions.

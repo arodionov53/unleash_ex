@@ -24,6 +24,50 @@ defmodule Unleash.SocketDebugTest do
 
   alias Unleash.SocketDebug
 
+  describe "version information" do
+    test "version/0 returns a version string" do
+      version = SocketDebug.version()
+
+      assert is_binary(version)
+      assert String.match?(version, ~r/^\d+\.\d+\.\d+$/)
+    end
+
+    test "version_info/0 returns comprehensive information" do
+      info = SocketDebug.version_info()
+
+      assert %{
+        version: version,
+        module: module,
+        capabilities: capabilities,
+        features: features,
+        erlang_otp_version: otp_version,
+        elixir_version: elixir_version
+      } = info
+
+      assert is_binary(version)
+      assert module == Unleash.SocketDebug
+      assert is_list(capabilities)
+      assert is_map(features)
+      assert is_binary(otp_version)
+      assert is_binary(elixir_version)
+
+      # Check that expected capabilities are present
+      expected_capabilities = [
+        :httpc_debugging,
+        :ssl_connections,
+        :socket_monitoring,
+        :connection_health,
+        :hanging_detection,
+        :inet_socket_info,
+        :ssl_socket_examples
+      ]
+
+      Enum.each(expected_capabilities, fn capability ->
+        assert capability in capabilities, "Missing capability: #{capability}"
+      end)
+    end
+  end
+
   describe "extract_session_info/1" do
     test "extracts info from valid session tuple" do
       session =
