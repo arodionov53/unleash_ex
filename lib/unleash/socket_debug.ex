@@ -145,16 +145,21 @@ defmodule Unleash.SocketDebug do
   Get peer (remote) address from socket.
   """
   def get_peer_address(socket_ref) do
-    case :inet.peername(socket_ref) do
-      {:ok, {ip_tuple, port}} ->
-        %{
-          ip: ip_tuple_to_string(ip_tuple),
-          port: port,
-          ip_tuple: ip_tuple
-        }
+    # Check if socket_ref is actually a port before calling inet functions
+    if is_port(socket_ref) do
+      case :inet.peername(socket_ref) do
+        {:ok, {ip_tuple, port}} ->
+          %{
+            ip: ip_tuple_to_string(ip_tuple),
+            port: port,
+            ip_tuple: ip_tuple
+          }
 
-      {:error, reason} ->
-        %{error: reason}
+        {:error, reason} ->
+          %{error: reason}
+      end
+    else
+      %{error: :invalid_socket_reference, socket_type: inspect(socket_ref)}
     end
   end
 
@@ -162,16 +167,20 @@ defmodule Unleash.SocketDebug do
   Get local address from socket.
   """
   def get_local_address(socket_ref) do
-    case :inet.sockname(socket_ref) do
-      {:ok, {ip_tuple, port}} ->
-        %{
-          ip: ip_tuple_to_string(ip_tuple),
-          port: port,
-          ip_tuple: ip_tuple
-        }
+    if is_port(socket_ref) do
+      case :inet.sockname(socket_ref) do
+        {:ok, {ip_tuple, port}} ->
+          %{
+            ip: ip_tuple_to_string(ip_tuple),
+            port: port,
+            ip_tuple: ip_tuple
+          }
 
-      {:error, reason} ->
-        %{error: reason}
+        {:error, reason} ->
+          %{error: reason}
+      end
+    else
+      %{error: :invalid_socket_reference, socket_type: inspect(socket_ref)}
     end
   end
 
@@ -179,20 +188,24 @@ defmodule Unleash.SocketDebug do
   Get socket statistics (bytes sent/received, etc.).
   """
   def get_socket_stats(socket_ref) do
-    case :inet.getstat(socket_ref) do
-      {:ok, stats} ->
-        stats
-        |> Enum.into(%{})
-        |> Map.merge(%{
-          status: :ok,
-          recv_bytes: stats[:recv_oct] || 0,
-          send_bytes: stats[:send_oct] || 0,
-          recv_packets: stats[:recv_cnt] || 0,
-          send_packets: stats[:send_cnt] || 0
-        })
+    if is_port(socket_ref) do
+      case :inet.getstat(socket_ref) do
+        {:ok, stats} ->
+          stats
+          |> Enum.into(%{})
+          |> Map.merge(%{
+            status: :ok,
+            recv_bytes: stats[:recv_oct] || 0,
+            send_bytes: stats[:send_oct] || 0,
+            recv_packets: stats[:recv_cnt] || 0,
+            send_packets: stats[:send_cnt] || 0
+          })
 
-      {:error, reason} ->
-        %{error: reason}
+        {:error, reason} ->
+          %{error: reason}
+      end
+    else
+      %{error: :invalid_socket_reference, socket_type: inspect(socket_ref)}
     end
   end
 
@@ -200,32 +213,36 @@ defmodule Unleash.SocketDebug do
   Get socket options (buffer sizes, timeouts, etc.).
   """
   def get_socket_options(socket_ref) do
-    opts_to_check = [
-      :active,
-      :buffer,
-      :delay_send,
-      :exit_on_close,
-      :header,
-      :keepalive,
-      :nodelay,
-      :packet,
-      :packet_size,
-      :read_packets,
-      :recbuf,
-      :reuseaddr,
-      :send_timeout,
-      :send_timeout_close,
-      :sndbuf,
-      :priority,
-      :tos
-    ]
+    if is_port(socket_ref) do
+      opts_to_check = [
+        :active,
+        :buffer,
+        :delay_send,
+        :exit_on_close,
+        :header,
+        :keepalive,
+        :nodelay,
+        :packet,
+        :packet_size,
+        :read_packets,
+        :recbuf,
+        :reuseaddr,
+        :send_timeout,
+        :send_timeout_close,
+        :sndbuf,
+        :priority,
+        :tos
+      ]
 
-    case :inet.getopts(socket_ref, opts_to_check) do
-      {:ok, opts} ->
-        opts |> Enum.into(%{})
+      case :inet.getopts(socket_ref, opts_to_check) do
+        {:ok, opts} ->
+          opts |> Enum.into(%{})
 
-      {:error, reason} ->
-        %{error: reason}
+        {:error, reason} ->
+          %{error: reason}
+      end
+    else
+      %{error: :invalid_socket_reference, socket_type: inspect(socket_ref)}
     end
   end
 
@@ -233,11 +250,15 @@ defmodule Unleash.SocketDebug do
   Check if socket is healthy and responsive.
   """
   def check_socket_health(socket_ref) do
-    case :inet.getstat(socket_ref, [:recv_oct]) do
-      {:ok, _} -> :healthy
-      {:error, :closed} -> :closed
-      {:error, :enotconn} -> :not_connected
-      {:error, reason} -> {:error, reason}
+    if is_port(socket_ref) do
+      case :inet.getstat(socket_ref, [:recv_oct]) do
+        {:ok, _} -> :healthy
+        {:error, :closed} -> :closed
+        {:error, :enotconn} -> :not_connected
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :invalid_socket_reference}
     end
   end
 
