@@ -148,6 +148,11 @@ defmodule Unleash.SocketDebug do
        {:gen_tcp, {:"$inet", :gen_tcp_socket, {_pid, {:"$socket", socket_ref}}}}, _, _, _, _} ->
         {:ok, socket_ref}
 
+      # Direct $inet gen_tcp_socket structure (common in newer OTP)
+      {:session, _host_info, _, _,
+       {:"$inet", :gen_tcp_socket, {_pid, {:"$socket", socket_ref}}}, _, _, _, _} ->
+        {:ok, socket_ref}
+
       # Direct port reference (common for plain HTTP)
       {:session, _host_info, _, _protocol, socket_port, _ssl_opts, _version, _keepalive, _reused}
       when is_port(socket_port) ->
