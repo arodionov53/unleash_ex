@@ -1,4 +1,6 @@
 defmodule Unleash.Http.SimpleHttp do
+  @behaviour Unleash.Http.SimpleHttp.Behavior
+
   alias Unleash.Config
 
   require Logger

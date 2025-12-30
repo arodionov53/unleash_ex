@@ -7,14 +7,21 @@ defmodule Unleash.MetricsTest do
   alias Unleash.Config
   alias Unleash.Feature
 
+  setup :set_mox_from_context
+
   setup do
     stop_supervised(Unleash.Metrics)
+
+    # Set up HTTP client mock (similar to client_test.exs)
+    original_http_client = Application.get_env(:unleash, :http_client)
+    Application.put_env(:unleash, :http_client, SimpleHttpMock)
 
     original_metrics_period = Config.metrics_period()
     Application.put_env(:unleash, :metrics_period, 60_000_000_000)
     {:ok, metrics} = start_supervised(Unleash.Metrics)
 
     on_exit(fn ->
+      Application.put_env(:unleash, :http_client, original_http_client)
       Application.put_env(:unleash, :metrics_period, original_metrics_period)
     end)
 
@@ -77,7 +84,7 @@ defmodule Unleash.MetricsTest do
                   nonempty(uniq_list_of(string(:alphanumeric, min_length: 1))),
                 n <- list_of(positive_integer(), length: length(v)),
                 variants = Enum.zip(v, n) do
-        test_pid = self()
+        _test_pid = self()
 
         feature = "feature_1"
 
@@ -111,7 +118,7 @@ defmodule Unleash.MetricsTest do
       |> allow(self(), metrics)
       |> expect(:metrics, fn %{bucket: %{toggles: toggles} = _bucket} ->
         assert toggles == %{}
-        %Finch.Response{}
+        {:ok, %SimpleHttp.Response{status: 200}}
       end)
 
       Application.put_env(:unleash, :client, Unleash.ClientMock)

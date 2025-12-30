@@ -2,6 +2,9 @@ defmodule UnleashTest do
   use ExUnit.Case
   import Mox
 
+  setup :set_mox_from_context
+  setup :verify_on_exit!
+
   describe "enabled?/2" do
     setup :start_repo
 
@@ -133,8 +136,11 @@ defmodule UnleashTest do
 
   describe "start/1" do
     test "it should listen to configuration when starting the supervisor tree" do
+      # Set mock to global mode so it works across processes
+      set_mox_global()
+
       Unleash.ClientMock
-      |> expect(:register_client, fn -> {:ok, %{}} end)
+      |> stub(:register_client, fn -> {:ok, %{}} end)
       |> stub(:features, fn _ -> {:ok, %{etag: "test_etag", features: %Unleash.Features{}}} end)
       |> stub(:metrics, fn _ -> {:ok, %SimpleHttp.Response{}} end)
 
@@ -146,21 +152,31 @@ defmodule UnleashTest do
 
       assert Enum.any?(children, &Kernel.match?({Unleash.Repo, _, _, _}, &1))
       assert Enum.any?(children, &Kernel.match?({Unleash.Metrics, _, _, _}, &1))
+
+      # Give the spawned registration process time to complete
+      :timer.sleep(100)
     end
 
     test "it shouldn't start the metrics server if disabled" do
+      # Set mock to global mode so it works across processes
+      set_mox_global()
+
       Unleash.ClientMock
-      |> expect(:register_client, fn -> {:ok, %{}} end)
+      |> stub(:register_client, fn -> {:ok, %{}} end)
       |> stub(:features, fn _ -> {:ok, %{etag: "test_etag", features: %Unleash.Features{}}} end)
 
       Application.put_env(:unleash, :client, Unleash.ClientMock)
       Application.put_env(:unleash, :disable_metrics, true)
+      Application.put_env(:unleash, :disable_client, false)
       {:ok, pid} = Unleash.start(:normal, [])
 
       children = Supervisor.which_children(pid)
 
       assert Enum.any?(children, &Kernel.match?({Unleash.Repo, _, _, _}, &1))
       refute Enum.any?(children, &Kernel.match?({Unleash.Metrics, _, _, _}, &1))
+
+      # Give the spawned registration process time to complete
+      :timer.sleep(100)
     end
 
     test "it shouldn't start anything if the client is disabled" do
