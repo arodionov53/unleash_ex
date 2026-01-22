@@ -1,4 +1,4 @@
-defmodule Unleash.Strategy.ConstraintTest do
+defmodule Unleash.Strategy.ConstraintCompTest do
   use ExUnit.Case
 
   alias Unleash.Strategy.Constraint
@@ -477,5 +477,6 @@ defmodule Unleash.Strategy.ConstraintTest do
       "value" => Map.get(map, "value", ""),
       "values" => Map.get(map, "values", [])
     }
+    |> Constraint.from_map()
   end
 end
