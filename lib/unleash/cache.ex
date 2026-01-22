@@ -81,6 +81,8 @@ defmodule Unleash.Cache do
 
     :ok = :dets.delete_all_objects(@dets_table_name)
     :ok = :dets.from_ets(@dets_table_name, table_name)
+    # Add this line to force sync to disk
+    :ok = :dets.sync(@dets_table_name)
   end
 
   defp upsert_feature(name, value, table_name) when is_binary(name) do

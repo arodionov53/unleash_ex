@@ -46,7 +46,6 @@ defmodule Unleash.Repo do
 
   def handle_info({:initialize, etag, retries}, state) do
     telemetry_metadata = Unleash.Client.telemetry_metadata(%{retries: retries, etag: etag})
-
     if retries > 0 or retries <= -1 do
       cached_features = %Features{features: Cache.get_features()}
 
@@ -57,24 +56,21 @@ defmodule Unleash.Repo do
 
           {nil, _error} ->
             {source, features} = read_file_state(cached_features)
-
             {source, schedule_features(features, etag, retries - 1)}
 
           {etag, features} ->
             {:remote, schedule_features(features, etag)}
         end
-
       :telemetry.execute(
         [:unleash, :repo, :features_update],
         %{},
         Map.put(telemetry_metadata, :source, source)
       )
-
       if remote_features === cached_features do
         {:noreply, state}
       else
         Cache.upsert_features(remote_features.features)
-        # write_file_state(remote_features)
+        write_file_state()
         {:noreply, state}
       end
     else
@@ -97,13 +93,6 @@ defmodule Unleash.Repo do
   defp client_adaptor({:ok, map}), do: {map[:etag], map[:features]}
 
   def read_file_state(%Features{features: []} = cached_features) do
-    # if File.exists?(Config.backup_file()) do
-    #   {:backup_file,
-    #    Config.backup_file()
-    #    |> File.read!()
-    #    |> Jason.decode!()
-    #    |> Features.from_map!()}
-    #    |> IO.inspect(label: "read_file_state")
     if Cache.dets_file_exists?() do
       {:backup_file,
        Cache.read_features_from_dets()
@@ -115,23 +104,16 @@ defmodule Unleash.Repo do
 
   def read_file_state(cached_features), do: {:cache, cached_features}
 
-  # defp write_file_state(features) do
-  #   :ok = File.mkdir_p(Config.backup_dir())
-
-  #   content = Jason.encode_to_iodata!(features)
-
-  #   Config.backup_file()
-  #   |> File.write!(content)
-
-  #   :telemetry.execute(
-  #     [:unleash, :repo, :backup_file_update],
-  #     %{},
-  #     Unleash.Client.telemetry_metadata(%{
-  #       content: content,
-  #       filename: Config.backup_file()
-  #     })
-  #   )
-  # end
+  defp write_file_state() do
+    :telemetry.execute(
+      [:unleash, :repo, :backup_file_update],
+      %{},
+      Unleash.Client.telemetry_metadata(%{
+        # content: content,
+        filename: Config.dets_file()
+      })
+    )
+  end
 
   defp initialize do
     Process.send(Unleash.Repo, {:initialize, nil, Config.retries()}, [])

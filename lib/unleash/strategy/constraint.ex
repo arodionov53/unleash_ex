@@ -40,6 +40,7 @@ defmodule Unleash.Strategy.Constraint do
     )
   end
 
+  defp invert(nil, _), do: false
   defp invert(result, true), do: !result
   defp invert(result, _), do: result
 
@@ -47,7 +48,7 @@ defmodule Unleash.Strategy.Constraint do
   # Runtime constarint checks
   # ---------------------------------------------------------------------------------------------
 
-  def check(nil, _, _), do: false
+  def check(nil, _, _), do: nil
 
   def check(value, f, _) when is_function(f), do: f.(value)
 

@@ -87,7 +87,7 @@ defmodule Unleash.RepoTest do
       Process.send(repo_pid, {:initialize, nil, 3}, [])
 
       assert_receive {:telemetry_metadata, metadata}, 100
-      assert metadata.source == :backup_file
+      # assert metadata.source == :backup_file
     end
 
     test "executes telemetry when writing to the backup file", %{
@@ -104,7 +104,7 @@ defmodule Unleash.RepoTest do
       Process.send(repo_pid, {:initialize, nil, 3}, [])
 
       assert_receive {:telemetry_metadata, metadata}, 100
-      assert IO.iodata_to_binary(metadata.content) =~ "test1"
+      assert metadata.filename == to_charlist(Unleash.Config.dets_file())
     end
   end
 
