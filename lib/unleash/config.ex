@@ -67,7 +67,7 @@ defmodule Unleash.Config do
   def dets_file do
     application_env(:dets_backup_file)
     |> case do
-      nil -> Path.join([System.tmp_dir!(), appname(), "unleash_repo.dets"])
+      nil -> Path.join([System.tmp_dir!(), "unleash_repo.dets"])
       f -> f
     end
     |> String.to_charlist()
