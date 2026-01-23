@@ -105,12 +105,18 @@ defmodule Unleash.Repo do
   def read_file_state(cached_features), do: {:cache, cached_features}
 
   defp write_file_state() do
+    filename = if Cache.dets_file_exists?() do
+      Cache.write_features_to_dets()
+      Config.dets_file()
+    else
+      "no DETS file"
+    end
+
     :telemetry.execute(
       [:unleash, :repo, :backup_file_update],
       %{},
       Unleash.Client.telemetry_metadata(%{
-        # content: content,
-        filename: Config.dets_file()
+        filename: filename
       })
     )
   end
