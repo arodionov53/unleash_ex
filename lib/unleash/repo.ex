@@ -46,6 +46,7 @@ defmodule Unleash.Repo do
 
   def handle_info({:initialize, etag, retries}, state) do
     telemetry_metadata = Unleash.Client.telemetry_metadata(%{retries: retries, etag: etag})
+
     if retries > 0 or retries <= -1 do
       cached_features = %Features{features: Cache.get_features()}
 
@@ -61,11 +62,13 @@ defmodule Unleash.Repo do
           {etag, features} ->
             {:remote, schedule_features(features, etag)}
         end
+
       :telemetry.execute(
         [:unleash, :repo, :features_update],
         %{},
         Map.put(telemetry_metadata, :source, source)
       )
+
       if remote_features === cached_features do
         {:noreply, state}
       else
@@ -105,12 +108,13 @@ defmodule Unleash.Repo do
   def read_file_state(cached_features), do: {:cache, cached_features}
 
   defp write_file_state() do
-    filename = if Cache.dets_file_exists?() do
-      Cache.write_features_to_dets()
-      Config.dets_file()
-    else
-      "no DETS file"
-    end
+    filename =
+      if Cache.dets_file_exists?() do
+        Cache.write_features_to_dets()
+        Config.dets_file()
+      else
+        "no DETS file"
+      end
 
     :telemetry.execute(
       [:unleash, :repo, :backup_file_update],

@@ -19,14 +19,16 @@ defmodule Unleash.Cache do
   """
   def init(existing_features \\ [], table_name \\ @cache_table_name) do
     :ets.new(table_name, [:named_table, read_concurrency: true])
+
     case :dets.open_file(@dets_table_name, file: Config.dets_file()) do
       {:ok, _pid} ->
         Logger.info("Opened DETS file #{Config.dets_file()} successfully")
+
       {:error, reason} ->
         Logger.error("Failed to open DETS file: #{inspect(reason)}")
     end
-    upsert_features(existing_features, table_name)
 
+    upsert_features(existing_features, table_name)
   end
 
   @doc """
@@ -86,7 +88,6 @@ defmodule Unleash.Cache do
     Enum.each(features, fn feature ->
       upsert_feature(feature.name, feature, table_name)
     end)
-
   end
 
   defp upsert_feature(name, value, table_name) when is_binary(name) do
@@ -113,5 +114,4 @@ defmodule Unleash.Cache do
     # Add this line to force sync to disk
     :ok = :dets.sync(@dets_table_name)
   end
-
 end
