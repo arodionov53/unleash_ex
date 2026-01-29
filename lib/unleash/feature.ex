@@ -1,10 +1,12 @@
 defmodule Unleash.Feature do
   @moduledoc false
 
+  alias Unleash.Config
+  alias Unleash.FeatureCompiler
   alias Unleash.Strategy
   alias Unleash.Variant
 
-  @derive Jason.Encoder
+  @derive {Jason.Encoder, except: [:__compiled_enabled__]}
   defstruct name: "",
             type: "",
             project: "",
@@ -12,10 +14,11 @@ defmodule Unleash.Feature do
             enabled: false,
             strategies: [],
             parameters: %{},
-            variants: []
+            variants: [],
+            __compiled_enabled__: nil
 
   def from_map(map) when is_map(map) do
-    %__MODULE__{
+    feature = %__MODULE__{
       name: Map.get(map, "name", ""),
       type: Map.get(map, "type", ""),
       project: Map.get(map, "project", ""),
@@ -25,11 +28,24 @@ defmodule Unleash.Feature do
       parameters: Map.get(map, "parameters", %{}),
       variants: Enum.map(Map.get(map, "variants", []) || [], &Variant.from_map/1)
     }
+
+    # Compile feature evaluation if enabled
+    if Config.feature_compilation() do
+      %{feature | __compiled_enabled__: FeatureCompiler.compile_feature(feature)}
+    else
+      feature
+    end
   end
 
   def from_map(_), do: %__MODULE__{}
 
   def enabled?(nil, _context), do: {false, []}
+
+  # Use compiled evaluation function when available
+  def enabled?(%__MODULE__{__compiled_enabled__: compiled} = _feature, context)
+      when is_function(compiled) do
+    compiled.(context)
+  end
 
   def enabled?(%__MODULE__{enabled: enabled, strategies: []}, _context),
     do: {enabled, []}

@@ -67,19 +67,19 @@ defmodule Mix.Tasks.Benchmark.Constraint do
   ]
 
   def run(args) do
-    {options, _} = OptionParser.parse!(args,
-      switches: [
-        quick: :boolean,
-        stress: :boolean,
-        creation: :boolean,
-        help: :boolean
-      ]
-    )
+    {options, _} =
+      OptionParser.parse!(args,
+        switches: [
+          quick: :boolean,
+          stress: :boolean,
+          creation: :boolean,
+          help: :boolean
+        ]
+      )
 
     if options[:help] do
       Mix.shell().info(@moduledoc)
     else
-
       # Ensure application is started for proper config access
       Mix.Task.run("app.start")
 
@@ -162,16 +162,18 @@ defmodule Mix.Tasks.Benchmark.Constraint do
     non_compiled_constraints = Enum.map(@test_constraints, &Constraint.from_map(&1, false))
 
     # Generate varied contexts
-    contexts = for i <- 1..50 do
-      %{
-        "userId" => "user#{i}",
-        "email" => "user#{i}@example.com",
-        "version" => "1.2.#{rem(i, 10)}",
-        "score" => "#{75 + rem(i, 25)}",
-        "region" => Enum.random(["us-west", "us-east", "eu-west"]),
-        "date" => "2024-01-#{rem(i, 28) + 1 |> Integer.to_string() |> String.pad_leading(2, "0")}"
-      }
-    end
+    contexts =
+      for i <- 1..50 do
+        %{
+          "userId" => "user#{i}",
+          "email" => "user#{i}@example.com",
+          "version" => "1.2.#{rem(i, 10)}",
+          "score" => "#{75 + rem(i, 25)}",
+          "region" => Enum.random(["us-west", "us-east", "eu-west"]),
+          "date" =>
+            "2024-01-#{(rem(i, 28) + 1) |> Integer.to_string() |> String.pad_leading(2, "0")}"
+        }
+      end
 
     IO.puts("\n🔥 Stress Test (50 contexts, #{time}s each)")
     IO.puts(String.duplicate("-", 40))

@@ -30,6 +30,7 @@ defmodule Unleash.Config do
     registration_attempts: 5,
     registration_attempts_interval: 5000,
     constraint_precompilation: true,
+    feature_compilation: true,
     app_env: :test
   }
 
@@ -86,6 +87,8 @@ defmodule Unleash.Config do
   def client, do: application_env(:client)
 
   def constraint_precompilation, do: application_env(:constraint_precompilation)
+
+  def feature_compilation, do: application_env(:feature_compilation)
 
   def http_opts, do: application_env(:http_opts)
 

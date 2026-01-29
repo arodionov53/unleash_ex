@@ -18,6 +18,81 @@ defmodule Unleash.Strategy.Constraint do
     Enum.all?(constraints, &verify(&1, context))
   end
 
+  # ---------------------------------------------------------------------------------------------
+  # Constraint list compilation
+  # Compiles a list of constraints into a single function: fn context -> bool end
+  # Pre-computes context field names (snake_case conversion) at compile time
+  # ---------------------------------------------------------------------------------------------
+
+  @doc """
+  Compiles a list of constraints into a single function that evaluates all constraints.
+  Pre-computes context field names (snake_case conversion) at compile time.
+  Returns: `fn context -> boolean end`
+  """
+  def compile_all(constraints, precompile \\ Config.constraint_precompilation())
+
+  def compile_all([], _), do: fn _context -> true end
+  def compile_all(nil, _), do: fn _context -> true end
+
+  def compile_all(constraints, true) when is_list(constraints) do
+    compiled_checks = Enum.map(constraints, &compile_single_constraint/1)
+
+    fn context ->
+      Enum.all?(compiled_checks, fn check -> check.(context) end)
+    end
+  end
+
+  def compile_all(constraints, _), do: fn context -> verify_all(constraints, context) end
+
+  @doc """
+  Compiles a single constraint into a function: `fn context -> bool end`
+  Pre-computes:
+    - Context field atom (snake_case conversion done once)
+    - Operator function (already done by op_compile)
+    - Inversion logic
+  """
+  def compile_single_constraint(
+        %{"contextName" => name, "operator" => op, "inverted" => inverted} = constraint
+      ) do
+    # Pre-compute the context field atom at compile time
+    field_atom = String.to_atom(Recase.to_snake(name))
+
+    # Get or compile the operator function
+    op_fn = if is_function(op), do: op, else: op_comp(op, constraint)
+
+    # Return compiled constraint function
+    fn context ->
+      value = get_context_value(context, field_atom, name)
+      result = safe_check(value, op_fn)
+      apply_inversion(result, inverted)
+    end
+  end
+
+  def compile_single_constraint(_), do: fn _context -> false end
+
+  # Fast context value lookup with pre-computed atom
+  defp get_context_value(nil, _field_atom, _name), do: nil
+
+  defp get_context_value(context, field_atom, name) do
+    case Map.get(context, field_atom) do
+      nil ->
+        context
+        |> Map.get(:properties)
+        |> get_context_value(field_atom, name)
+
+      value ->
+        value
+    end
+  end
+
+  defp safe_check(nil, _), do: nil
+  defp safe_check(value, op_fn) when is_function(op_fn), do: op_fn.(value)
+  defp safe_check(_, _), do: false
+
+  defp apply_inversion(nil, _), do: false
+  defp apply_inversion(result, true), do: !result
+  defp apply_inversion(result, _), do: result
+
   defp verify(
          %{"contextName" => name, "operator" => op, "inverted" => inverted} = constraint,
          context

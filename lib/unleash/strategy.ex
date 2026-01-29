@@ -33,7 +33,23 @@ defmodule Unleash.Strategy do
         {constraints, Enum.map(constraints || [], &Constraint.from_map/1)}
       end)
 
+    # Pre-resolve strategy module at load time
+    strategy_module = resolve_strategy_module(Map.get(map, "name"))
+
+    # Compile constraints into a single function
+    compiled_constraints = Constraint.compile_all(new_map3["constraints"])
+
     new_map3
+    |> Map.put("__strategy_module__", strategy_module)
+    |> Map.put("__compiled_constraints__", compiled_constraints)
+  end
+
+  # Pre-resolve strategy module - called once at feature load
+  defp resolve_strategy_module(name) do
+    case Enum.find(Config.strategies(), fn {n, _mod} -> n == name end) do
+      {_name, module} -> module
+      nil -> nil
+    end
   end
 
   defmacro __using__(opts) do
@@ -85,6 +101,21 @@ defmodule Unleash.Strategy do
               boolean() | {boolean(), map()}
 
   @doc false
+  # Use pre-resolved module and compiled constraints when available
+  def enabled?(
+        %{"__strategy_module__" => module, "__compiled_constraints__" => compiled_fn} = strategy,
+        context
+      )
+      when not is_nil(module) and is_function(compiled_fn) do
+    compiled_fn.(context) and module.check_enabled(strategy["parameters"], context)
+  end
+
+  # Fallback for strategies with pre-resolved module but no compiled constraints
+  def enabled?(%{"__strategy_module__" => module} = strategy, context) when not is_nil(module) do
+    check_constraints(strategy, context) and module.check_enabled(strategy["parameters"], context)
+  end
+
+  # Fallback for non-compiled strategies (backward compatibility)
   def enabled?(%{"name" => name} = strategy, context) do
     {_name, module} =
       Config.strategies()
@@ -94,6 +125,12 @@ defmodule Unleash.Strategy do
   end
 
   def enabled?(_strat, _context), do: false
+
+  # Use compiled constraints function when available
+  defp check_constraints(%{"__compiled_constraints__" => compiled_fn}, context)
+       when is_function(compiled_fn) do
+    compiled_fn.(context)
+  end
 
   defp check_constraints(%{"constraints" => constraints}, context),
     do: Constraint.verify_all(constraints, context)
