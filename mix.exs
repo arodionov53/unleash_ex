@@ -62,6 +62,7 @@ defmodule Unleash.MixProject do
       {:dialyxir, "~> 1.4", only: :dev, runtime: false},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:expublish, "~> 2.7", only: :dev, runtime: false},
+      {:benchee, "~> 1.3", only: :dev},
       {:junit_formatter, "~> 3.0", only: :test},
       {:stream_data, "~> 1.2", only: [:test, :dev]},
       {:excoveralls, "~> 0.16", only: :test},
