@@ -159,12 +159,16 @@ A new ETS-based implementation using `:counters` for lock-free atomic updates.
 
 ## Usage
 
-### Enable Fast Metrics
+### Default Configuration
+
+As of this update, `fast_metrics: true` is the **default** setting. No configuration change is needed to use the optimized implementation.
+
+### Disable Fast Metrics (if needed)
 
 ```elixir
-# config/config.exs or config/prod.exs
+# config/config.exs - to use the original GenServer-based implementation
 config :unleash,
-  fast_metrics: true
+  fast_metrics: false
 ```
 
 ### Run Benchmarks
@@ -189,23 +193,22 @@ mix benchmark.metrics --add-metric --stress
 
 | Traffic Level | Recommendation | Config |
 |---------------|----------------|--------|
-| Low (< 1K/s) | Default GenServer | `fast_metrics: false` (default) |
-| Medium (1K-10K/s) | Either works | Optional |
-| High (> 10K/s) | Use MetricsFast | `fast_metrics: true` |
-| Very High (> 100K/s) | **Required** MetricsFast | `fast_metrics: true` |
+| Any | MetricsFast (default) | `fast_metrics: true` (default) |
+| Legacy/compatibility | GenServer | `fast_metrics: false` |
 
-### When to Use MetricsFast
+### When to Use Default (MetricsFast)
 
+- All new deployments (recommended)
 - High-frequency feature flag checks (> 10K/s)
 - Latency-sensitive applications
 - Memory-constrained environments
 - Applications with many concurrent requests
 
-### When Default is Sufficient
+### When to Disable Fast Metrics
 
-- Low to moderate traffic
-- Simpler operational requirements
-- When metrics overhead is not a concern
+- If you experience issues with the new implementation
+- For backward compatibility with custom metrics integrations
+- When debugging metrics-related issues
 
 ---
 
