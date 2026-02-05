@@ -13,7 +13,7 @@ defmodule Unleash.Config do
     custom_http_headers: [],
     disable_client: false,
     disable_metrics: false,
-    fast_metrics: false,
+    fast_metrics: true,
     retries: -1,
     client: Unleash.Client,
     http_client: Unleash.Http.SimpleHttp,

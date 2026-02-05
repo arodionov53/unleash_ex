@@ -486,20 +486,15 @@ defmodule Mix.Tasks.Benchmark.Metrics do
     #{String.duplicate("=", 60)}
     📈 COMPARISON SUMMARY
 
-    GenServer-based (Unleash.Metrics) - Default:
-    • Simple implementation using casts
-    • Single process handles all updates sequentially
-    • Good for low to moderate traffic
-
-    Fast ETS-based (Unleash.MetricsFast) - Optional:
+    Fast ETS-based (Unleash.MetricsFast) - DEFAULT:
     • Lock-free atomic counter updates via :counters
     • No message passing - direct ETS operations
     • ~40x faster, ~150x less memory
-    • Enable with: config :unleash, fast_metrics: true
 
-    Recommendation:
-    • Use default for < 10K metrics/second
-    • Use fast_metrics: true for high-throughput apps
+    GenServer-based (Unleash.Metrics) - Legacy:
+    • Simple implementation using casts
+    • Single process handles all updates sequentially
+    • Disable with: config :unleash, fast_metrics: false
 
     #{String.duplicate("=", 60)}
     """)
