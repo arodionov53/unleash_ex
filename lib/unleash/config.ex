@@ -13,6 +13,7 @@ defmodule Unleash.Config do
     custom_http_headers: [],
     disable_client: false,
     disable_metrics: false,
+    disable_telemetry: false,
     retries: -1,
     client: Unleash.Client,
     http_client: Unleash.Http.SimpleHttp,
@@ -69,6 +70,22 @@ defmodule Unleash.Config do
   def disable_client, do: application_env(:disable_client)
 
   def disable_metrics, do: application_env(:disable_metrics)
+
+  def disable_telemetry, do: application_env(:disable_telemetry)
+
+  @telemetry_pt_key :unleash_disable_telemetry
+
+  def telemetry_pt_key, do: @telemetry_pt_key
+
+  @doc false
+  def cache_disable_telemetry do
+    :persistent_term.put(@telemetry_pt_key, !!application_env(:disable_telemetry))
+  end
+
+  @doc false
+  def telemetry_disabled? do
+    :persistent_term.get(@telemetry_pt_key, false)
+  end
 
   def retries, do: application_env(:retries)
 

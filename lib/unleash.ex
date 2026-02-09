@@ -87,6 +87,38 @@ defmodule Unleash do
   """
   @spec enabled?(atom() | String.t(), map(), boolean) :: boolean
   def enabled?(feature, context \\ %{}, default \\ false) do
+    if Config.telemetry_disabled?() do
+      enabled_no_telemetry(feature, context, default)
+    else
+      enabled_with_telemetry(feature, context, default)
+    end
+  end
+
+  defp enabled_no_telemetry(feature, context, default) do
+    if Config.disable_client() do
+      default
+    else
+      feature
+      |> Repo.get_feature()
+      |> case do
+        nil ->
+          default
+
+        loaded_feature ->
+          {result, _strategy_evaluations} =
+            Feature.enabled?(
+              loaded_feature,
+              Map.put(context, :feature_toggle, loaded_feature.name)
+            )
+
+          Metrics.add_metric({loaded_feature, result})
+
+          result
+      end
+    end
+  end
+
+  defp enabled_with_telemetry(feature, context, default) do
     start_metadata = Unleash.Client.telemetry_metadata(%{feature: feature, context: context})
 
     :telemetry.span(
@@ -154,6 +186,32 @@ defmodule Unleash do
   """
   @spec get_variant(atom() | String.t(), map(), Variant.result()) :: Variant.result()
   def get_variant(feature, context \\ %{}, fallback \\ Variant.disabled()) do
+    if Config.telemetry_disabled?() do
+      get_variant_no_telemetry(feature, context, fallback)
+    else
+      get_variant_with_telemetry(feature, context, fallback)
+    end
+  end
+
+  defp get_variant_no_telemetry(feature, context, fallback) do
+    if Config.disable_client() do
+      fallback
+    else
+      feature
+      |> Repo.get_feature()
+      |> case do
+        nil ->
+          fallback
+
+        loaded_feature ->
+          {result, _metadata} = Variant.select_variant(loaded_feature, context)
+          Metrics.add_variant_metric({loaded_feature, result})
+          result
+      end
+    end
+  end
+
+  defp get_variant_with_telemetry(feature, context, fallback) do
     start_metadata = Unleash.Client.telemetry_metadata(%{feature_name: feature, context: context})
 
     :telemetry.span(
@@ -185,6 +243,7 @@ defmodule Unleash do
   @doc false
   def start(_type, _args) do
     :persistent_term.put(Config.persisten_term_key(), false)
+    Config.cache_disable_telemetry()
 
     children =
       [
