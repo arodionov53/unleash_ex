@@ -64,11 +64,13 @@ defmodule Unleash.Repo do
             {:remote, schedule_features(features, etag)}
         end
 
-      :telemetry.execute(
-        [:unleash, :repo, :features_update],
-        %{},
-        Map.put(telemetry_metadata, :source, source)
-      )
+      unless Config.telemetry_disabled?() do
+        :telemetry.execute(
+          [:unleash, :repo, :features_update],
+          %{},
+          Map.put(telemetry_metadata, :source, source)
+        )
+      end
 
       if remote_features === cached_features do
         {:noreply, state}
@@ -78,7 +80,9 @@ defmodule Unleash.Repo do
         {:noreply, state}
       end
     else
-      :telemetry.execute([:unleash, :repo, :disable_polling], telemetry_metadata)
+      unless Config.telemetry_disabled?() do
+        :telemetry.execute([:unleash, :repo, :disable_polling], telemetry_metadata)
+      end
 
       {:noreply, state}
     end
@@ -118,14 +122,16 @@ defmodule Unleash.Repo do
     Config.backup_file()
     |> File.write!(content)
 
-    :telemetry.execute(
-      [:unleash, :repo, :backup_file_update],
-      %{},
-      Unleash.Client.telemetry_metadata(%{
-        content: content,
-        filename: Config.backup_file()
-      })
-    )
+    unless Config.telemetry_disabled?() do
+      :telemetry.execute(
+        [:unleash, :repo, :backup_file_update],
+        %{},
+        Unleash.Client.telemetry_metadata(%{
+          content: content,
+          filename: Config.backup_file()
+        })
+      )
+    end
   end
 
   defp initialize do
@@ -133,15 +139,17 @@ defmodule Unleash.Repo do
   end
 
   defp schedule_features(features, etag, retries \\ Config.retries()) do
-    :telemetry.execute(
-      [:unleash, :repo, :schedule],
-      %{},
-      Unleash.Client.telemetry_metadata(%{
-        retries: retries,
-        etag: etag,
-        interval: Config.features_period()
-      })
-    )
+    unless Config.telemetry_disabled?() do
+      :telemetry.execute(
+        [:unleash, :repo, :schedule],
+        %{},
+        Unleash.Client.telemetry_metadata(%{
+          retries: retries,
+          etag: etag,
+          interval: Config.features_period()
+        })
+      )
+    end
 
     Process.send_after(self(), {:initialize, etag, retries}, Config.features_period())
 

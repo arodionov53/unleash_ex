@@ -25,14 +25,20 @@ defmodule Unleash.Client do
 
     start_metadata = telemetry_metadata(%{etag: etag, url: url})
 
-    :telemetry.span(
-      @telemetry_features_prefix,
-      start_metadata,
-      fn ->
-        Config.http_client().get(url, headers)
-        |> handle_feature_response(start_metadata)
-      end
-    )
+    if Config.telemetry_disabled?() do
+      Config.http_client().get(url, headers)
+      |> handle_feature_response(start_metadata)
+      |> elem(0)
+    else
+      :telemetry.span(
+        @telemetry_features_prefix,
+        start_metadata,
+        fn ->
+          Config.http_client().get(url, headers)
+          |> handle_feature_response(start_metadata)
+        end
+      )
+    end
   end
 
   def register_client,
@@ -59,25 +65,27 @@ defmodule Unleash.Client do
       |> Map.put(:url, url)
       |> telemetry_metadata()
 
-    :telemetry.span(
-      @telemetry_register_prefix,
-      start_metadata,
-      fn ->
-        {result, metadata} = send_data(url, client, start_metadata)
+    do_register = fn ->
+      {result, metadata} = send_data(url, client, start_metadata)
 
-        case Config.http_client().status_code!(result) do
-          # following go implementaion
-          sc when sc >= 200 and sc < 300 ->
-            {{:ok,
-              result
-              |> Config.http_client().response_body!()
-              |> jdecode()}, metadata}
+      case Config.http_client().status_code!(result) do
+        # following go implementaion
+        sc when sc >= 200 and sc < 300 ->
+          {{:ok,
+            result
+            |> Config.http_client().response_body!()
+            |> jdecode()}, metadata}
 
-          _ ->
-            {{:error, Config.http_client().response_body!(result)}, metadata}
-        end
+        _ ->
+          {{:error, Config.http_client().response_body!(result)}, metadata}
       end
-    )
+    end
+
+    if Config.telemetry_disabled?() do
+      do_register.() |> elem(0)
+    else
+      :telemetry.span(@telemetry_register_prefix, start_metadata, do_register)
+    end
   end
 
   def metrics(met) do
@@ -85,11 +93,17 @@ defmodule Unleash.Client do
 
     start_metadata = telemetry_metadata(%{url: url, metrics_payload: met})
 
-    :telemetry.span(@telemetry_metrics_prefix, start_metadata, fn ->
+    do_metrics = fn ->
       {result, metadata} = send_data(url, met, start_metadata)
 
       {result, Map.merge(start_metadata, metadata)}
-    end)
+    end
+
+    if Config.telemetry_disabled?() do
+      do_metrics.() |> elem(0)
+    else
+      :telemetry.span(@telemetry_metrics_prefix, start_metadata, do_metrics)
+    end
   end
 
   defp handle_feature_response(response, meta) do
