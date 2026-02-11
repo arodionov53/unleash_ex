@@ -73,18 +73,42 @@ defmodule Unleash.Config do
 
   def disable_telemetry, do: application_env(:disable_telemetry)
 
-  @telemetry_pt_key :unleash_disable_telemetry
+  @telemetry_pt_key :unleash_telemetry_mode
 
   def telemetry_pt_key, do: @telemetry_pt_key
 
   @doc false
   def cache_disable_telemetry do
-    :persistent_term.put(@telemetry_pt_key, !!application_env(:disable_telemetry))
+    mode =
+      cond do
+        !!application_env(:disable_telemetry) -> :disabled
+        true -> :enabled
+      end
+
+    :persistent_term.put(@telemetry_pt_key, mode)
+  end
+
+  @doc """
+  Returns the current telemetry mode: :disabled, :enabled, or :mock.
+  """
+  def telemetry_mode do
+    :persistent_term.get(@telemetry_pt_key, :enabled)
+  end
+
+  @doc """
+  Sets the telemetry mode. Valid values: :disabled, :enabled, :mock.
+
+  :mock mode runs :telemetry.span with the same event structure
+  but skips actual feature/variant evaluation inside the span body.
+  Useful for benchmarking the overhead of telemetry itself.
+  """
+  def set_telemetry_mode(mode) when mode in [:disabled, :enabled, :mock] do
+    :persistent_term.put(@telemetry_pt_key, mode)
   end
 
   @doc false
   def telemetry_disabled? do
-    :persistent_term.get(@telemetry_pt_key, false)
+    telemetry_mode() == :disabled
   end
 
   def retries, do: application_env(:retries)

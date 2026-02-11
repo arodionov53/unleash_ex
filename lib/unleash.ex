@@ -87,10 +87,10 @@ defmodule Unleash do
   """
   @spec enabled?(atom() | String.t(), map(), boolean) :: boolean
   def enabled?(feature, context \\ %{}, default \\ false) do
-    if Config.telemetry_disabled?() do
-      enabled_no_telemetry(feature, context, default)
-    else
-      enabled_with_telemetry(feature, context, default)
+    case Config.telemetry_mode() do
+      :disabled -> enabled_no_telemetry(feature, context, default)
+      :enabled -> enabled_with_telemetry(feature, context, default)
+      :mock -> enabled_mock_telemetry(feature, context, default)
     end
   end
 
@@ -165,6 +165,18 @@ defmodule Unleash do
     )
   end
 
+  defp enabled_mock_telemetry(feature, context, default) do
+    start_metadata = Unleash.Client.telemetry_metadata(%{feature: feature, context: context})
+
+    :telemetry.span(
+      [:unleash, :feature, :enabled?],
+      start_metadata,
+      fn ->
+        {default, Map.put(start_metadata, :result, default)}
+      end
+    )
+  end
+
   @doc """
   Returns a variant for the given name.
 
@@ -186,10 +198,10 @@ defmodule Unleash do
   """
   @spec get_variant(atom() | String.t(), map(), Variant.result()) :: Variant.result()
   def get_variant(feature, context \\ %{}, fallback \\ Variant.disabled()) do
-    if Config.telemetry_disabled?() do
-      get_variant_no_telemetry(feature, context, fallback)
-    else
-      get_variant_with_telemetry(feature, context, fallback)
+    case Config.telemetry_mode() do
+      :disabled -> get_variant_no_telemetry(feature, context, fallback)
+      :enabled -> get_variant_with_telemetry(feature, context, fallback)
+      :mock -> get_variant_mock_telemetry(feature, context, fallback)
     end
   end
 
@@ -236,6 +248,18 @@ defmodule Unleash do
           end
 
         {result, Map.merge(start_metadata, metadata)}
+      end
+    )
+  end
+
+  defp get_variant_mock_telemetry(feature, context, fallback) do
+    start_metadata = Unleash.Client.telemetry_metadata(%{feature_name: feature, context: context})
+
+    :telemetry.span(
+      [:unleash, :variant, :get],
+      start_metadata,
+      fn ->
+        {fallback, start_metadata}
       end
     )
   end

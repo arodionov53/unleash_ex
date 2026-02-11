@@ -63,7 +63,7 @@ defmodule Unleash.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:recase, "~> 0.7"},
       {:simplehttp, git: "https://github.com/saleyn/simplehttp.git", branch: "master"},
-      {:jason, "~> 1.1"},
+      {:jason, "~> 1.3"},
       {:telemetry, "~> 1.1"},
       {:plug, "~> 1.8", optional: true},
       {:phoenix_gon, "~> 0.4.0", optional: true},
