@@ -84,7 +84,7 @@ defmodule Unleash.MetricsTest do
                   nonempty(uniq_list_of(string(:alphanumeric, min_length: 1))),
                 n <- list_of(positive_integer(), length: length(v)),
                 variants = Enum.zip(v, n) do
-        _test_pid = self()
+        test_pid = self()
 
         feature = "feature_1"
 

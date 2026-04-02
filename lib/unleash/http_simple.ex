@@ -5,7 +5,7 @@ defmodule Unleash.Http.SimpleHttp do
 
   require Logger
 
-  @erro_code 503
+  @error_code 503
 
   def get(url, headers) do
     opts = Config.http_opts()
@@ -33,20 +33,20 @@ defmodule Unleash.Http.SimpleHttp do
 
   def status_code!({:error, reason}) do
     Logger.error(Kernel.inspect(reason))
-    @erro_code
+    @error_code
   end
 
   def response_body!({:ok, %SimpleHttp.Response{body: body}}), do: body
 
   def response_body!({:error, reason}) do
     Logger.error(Kernel.inspect(reason))
-    @erro_code
+    @error_code
   end
 
   def response_headers!({:ok, %SimpleHttp.Response{headers: hdrs}}), do: hdrs
 
   def response_headers!({:error, reason}) do
     Logger.error(Kernel.inspect(reason))
-    @erro_code
+    @error_code
   end
 end

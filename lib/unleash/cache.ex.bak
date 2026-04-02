@@ -16,19 +16,7 @@ defmodule Unleash.Cache do
   """
   def init(existing_features \\ [], table_name \\ @cache_table_name) do
     :ets.new(table_name, [:named_table, read_concurrency: true])
-
-    # Create the directory if it doesn't exist
-    dets_file = Config.dets_file()
-    dets_file |> to_string() |> Path.dirname() |> File.mkdir_p!()
-
-    case :dets.open_file(@dets_table_name, file: dets_file) do
-      {:ok, _pid} -> :ok
-      {:error, {:file_error, _file, :enoent}} ->
-        # File doesn't exist yet, create it
-        {:ok, _pid} = :dets.open_file(@dets_table_name, [{:file, dets_file}, {:type, :set}])
-      {:error, reason} ->
-        raise "Failed to open DETS file: #{inspect(reason)}"
-    end
+    {:ok, _pid} = :dets.open_file(@dets_table_name, file: Config.dets_file())
 
     upsert_features(existing_features, table_name)
   end
