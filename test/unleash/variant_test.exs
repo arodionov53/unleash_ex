@@ -132,6 +132,8 @@ defmodule Unleash.VariantTest do
 
   defp start_repo(_) do
     stop_supervised(Unleash.Repo)
+    # Ensure client is enabled for these tests
+    Application.put_env(:unleash, :disable_client, false)
 
     state = Unleash.Features.from_map!(state())
 
