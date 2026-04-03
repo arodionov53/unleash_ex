@@ -141,13 +141,27 @@ defmodule Unleash.Strategy.Constraint do
   defp op_comp("NOT_IN", %{"values" => values}), do: fn x -> x not in values end
 
   defp op_comp("DATE_AFTER", %{"value" => value}) do
-    dt = day_adapter(value)
-    fn daytime -> daytime |> day_adapter |> day_cpm(dt) == :gt end
+    case day_adapter(value) do
+      {:error, _} -> fn _ -> false end
+      dt -> fn daytime ->
+        case day_adapter(daytime) do
+          {:error, _} -> false
+          parsed_daytime -> day_cpm(parsed_daytime, dt) == :gt
+        end
+      end
+    end
   end
 
   defp op_comp("DATE_BEFORE", %{"value" => value}) do
-    dt = day_adapter(value)
-    fn daytime -> daytime |> day_adapter |> day_cpm(dt) == :lt end
+    case day_adapter(value) do
+      {:error, _} -> fn _ -> false end
+      dt -> fn daytime ->
+        case day_adapter(daytime) do
+          {:error, _} -> false
+          parsed_daytime -> day_cpm(parsed_daytime, dt) == :lt
+        end
+      end
+    end
   end
 
   defp op_comp("STR_CONTAINS", %{"values" => values, "caseInsensitive" => true}) do
@@ -180,47 +194,95 @@ defmodule Unleash.Strategy.Constraint do
 
   defp op_comp("NUM_EQ", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x == y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n == y
+      end
+    end
   end
 
   defp op_comp("NUM_NEQ", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x != y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n != y
+      end
+    end
   end
 
   defp op_comp("NUM_GT", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x > y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n > y
+      end
+    end
   end
 
   defp op_comp("NUM_GTE", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x >= y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n >= y
+      end
+    end
   end
 
   defp op_comp("NUM_LE", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x < y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n < y
+      end
+    end
   end
 
   defp op_comp("NUM_LTE", %{"value" => value}) do
     y = to_number(value)
-    fn x -> x <= y end
+    fn x ->
+      case to_number(x) do
+        :error -> false
+        n -> n <= y
+      end
+    end
   end
 
   defp op_comp("SEMVER_EQ", %{"value" => value}) do
     v2 = mk_semver(value)
-    fn v1 -> mk_semver(v1) == v2 end
+    fn v1 ->
+      try do
+        mk_semver(v1) == v2
+      rescue
+        _ -> false
+      end
+    end
   end
 
   defp op_comp("SEMVER_GT", %{"value" => value}) do
     v2 = mk_semver(value)
-    fn v1 -> mk_semver(v1) > v2 end
+    fn v1 ->
+      try do
+        mk_semver(v1) > v2
+      rescue
+        _ -> false
+      end
+    end
   end
 
   defp op_comp("SEMVER_LT", %{"value" => value}) do
     v2 = mk_semver(value)
-    fn v1 -> mk_semver(v1) < v2 end
+    fn v1 ->
+      try do
+        mk_semver(v1) < v2
+      rescue
+        _ -> false
+      end
+    end
   end
 
   defp op_comp(op, _), do: op
