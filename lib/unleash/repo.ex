@@ -15,6 +15,7 @@ defmodule Unleash.Repo do
   alias Unleash.Cache
   alias Unleash.Config
   alias Unleash.Features
+  alias Unleash.MetricsFast
 
   def init(%Features{} = features) do
     Cache.init(features.features)
@@ -74,7 +75,8 @@ defmodule Unleash.Repo do
         {:noreply, state}
       else
         Cache.upsert_features(remote_features.features)
-        # write_file_state(remote_features)
+        maybe_register_fast_metrics(remote_features.features)
+        write_file_state(remote_features)
         {:noreply, state}
       end
     else
@@ -135,6 +137,12 @@ defmodule Unleash.Repo do
 
   defp initialize do
     Process.send(Unleash.Repo, {:initialize, nil, Config.retries()}, [])
+  end
+
+  defp maybe_register_fast_metrics(features) do
+    if Config.fast_metrics() do
+      MetricsFast.register_features(features)
+    end
   end
 
   defp schedule_features(features, etag, retries \\ Config.retries()) do
