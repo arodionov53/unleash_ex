@@ -76,7 +76,6 @@ defmodule Unleash.Repo do
       else
         Cache.upsert_features(remote_features.features)
         maybe_register_fast_metrics(remote_features.features)
-        write_file_state(remote_features)
         {:noreply, state}
       end
     else
