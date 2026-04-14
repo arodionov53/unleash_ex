@@ -15,24 +15,12 @@ defmodule Unleash.Client do
   @sdk_version "unleash_ex:#{Mix.Project.config()[:version]}"
   @accept {"Accept", "application/json"}
 
-  @telemetry_features_prefix [:unleash, :client, :fetch_features]
-  @telemetry_register_prefix [:unleash, :client, :register]
-  @telemetry_metrics_prefix [:unleash, :client, :push_metrics]
-
   def features(etag \\ nil) do
     headers = headers(etag)
     url = "#{Config.url()}/client/features"
 
-    start_metadata = telemetry_metadata(%{etag: etag, url: url})
-
-    :telemetry.span(
-      @telemetry_features_prefix,
-      start_metadata,
-      fn ->
-        Config.http_client().get(url, headers)
-        |> handle_feature_response(start_metadata)
-      end
-    )
+    Config.http_client().get(url, headers)
+    |> handle_feature_response()
   end
 
   def register_client,
@@ -49,53 +37,30 @@ defmodule Unleash.Client do
   def register(client) do
     url = "#{Config.url()}/client/register"
 
-    start_metadata =
-      client
-      |> Map.take([:sdkVersion, :strategies, :interval])
-      |> Map.new(fn
-        {:sdkVersion, value} -> {:sdk_version, value}
-        {key, value} -> {key, value}
-      end)
-      |> Map.put(:url, url)
-      |> telemetry_metadata()
+    result = send_data(url, client)
 
-    :telemetry.span(
-      @telemetry_register_prefix,
-      start_metadata,
-      fn ->
-        {result, metadata} = send_data(url, client, start_metadata)
+    case Config.http_client().status_code!(result) do
+      # following go implementaion
+      sc when sc >= 200 and sc < 300 ->
+        {:ok,
+         result
+         |> Config.http_client().response_body!()
+         |> jdecode()}
 
-        case Config.http_client().status_code!(result) do
-          # following go implementaion
-          sc when sc >= 200 and sc < 300 ->
-            {{:ok,
-              result
-              |> Config.http_client().response_body!()
-              |> jdecode()}, metadata}
-
-          _ ->
-            {{:error, Config.http_client().response_body!(result)}, metadata}
-        end
-      end
-    )
+      _ ->
+        {:error, Config.http_client().response_body!(result)}
+    end
   end
 
   def metrics(met) do
     url = "#{Config.url()}/client/metrics"
-
-    start_metadata = telemetry_metadata(%{url: url, metrics_payload: met})
-
-    :telemetry.span(@telemetry_metrics_prefix, start_metadata, fn ->
-      {result, metadata} = send_data(url, met, start_metadata)
-
-      {result, Map.merge(start_metadata, metadata)}
-    end)
+    send_data(url, met)
   end
 
-  defp handle_feature_response(response, meta) do
+  defp handle_feature_response(response) do
     case Config.http_client().status_code!(response) do
       304 ->
-        {:cached, Map.put(meta, :http_response_status, 304)}
+        :cached
 
       200 ->
         if :persistent_term.get(Config.persisten_term_key(), false) == false do
@@ -115,27 +80,21 @@ defmodule Unleash.Client do
           |> Map.new()
           |> Map.get("etag", :ok)
 
-        {{:ok, %{etag: etag, features: features}},
-         Map.merge(meta, %{http_response_status: 200, etag: etag})}
+        {:ok, %{etag: etag, features: features}}
 
       i when i >= 400 ->
-        {{:error, Config.http_client().response_body!(response)},
-         Map.put(meta, :http_response_status, i)}
+        {:error, Config.http_client().response_body!(response)}
 
-      status ->
-        {{:ok, :cached}, Map.put(meta, :http_response_status, status)}
+      _status ->
+        {:ok, :cached}
     end
   end
 
-  defp send_data(url, data, meta) do
-    result =
-      data
-      |> tag_data()
-      |> Jason.encode!()
-      |> then(&Config.http_client().post(url, headers(), &1))
-
-    code = Config.http_client().status_code!(result)
-    {result, Map.put(meta, :http_response_status, code)}
+  defp send_data(url, data) do
+    data
+    |> tag_data()
+    |> Jason.encode!()
+    |> then(&Config.http_client().post(url, headers(), &1))
   end
 
   defp headers(nil), do: headers()

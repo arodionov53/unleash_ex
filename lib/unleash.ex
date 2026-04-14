@@ -92,50 +92,26 @@ defmodule Unleash do
   """
   @spec enabled?(atom() | String.t(), map(), boolean) :: boolean
   def enabled?(feature, context \\ %{}, default \\ false) do
-    start_metadata = Unleash.Client.telemetry_metadata(%{feature: feature, context: context})
+    if Config.disable_client() do
+      default
+    else
+      feature
+      |> Repo.get_feature()
+      |> case do
+        nil ->
+          default
 
-    :telemetry.span(
-      [:unleash, :feature, :enabled?],
-      start_metadata,
-      fn ->
-        {result, metadata} =
-          if Config.disable_client() do
-            {default, %{reason: :disabled_client}}
-          else
-            feature
-            |> Repo.get_feature()
-            |> case do
-              nil ->
-                {default, %{reason: :feature_not_found}}
+        loaded_feature ->
+          {result, _strategy_evaluations} =
+            Feature.enabled?(
+              loaded_feature,
+              Map.put(context, :feature_toggle, loaded_feature.name)
+            )
 
-              loaded_feature ->
-                {result, strategy_evaluations} =
-                  Feature.enabled?(
-                    loaded_feature,
-                    Map.put(context, :feature_toggle, loaded_feature.name)
-                  )
-
-                Config.metrics_module().add_metric({loaded_feature, result})
-
-                metadata = %{
-                  feature_name: loaded_feature.name,
-                  reason: :strategy_evaluations,
-                  strategy_evaluations: strategy_evaluations,
-                  enabled: loaded_feature.enabled
-                }
-
-                {result, metadata}
-            end
-          end
-
-        telemetry_metadata =
-          start_metadata
-          |> Map.merge(metadata)
-          |> Map.put(:result, result)
-
-        {result, telemetry_metadata}
+          Config.metrics_module().add_metric({loaded_feature, result})
+          result
       end
-    )
+    end
   end
 
   @doc """
@@ -159,32 +135,21 @@ defmodule Unleash do
   """
   @spec get_variant(atom() | String.t(), map(), Variant.result()) :: Variant.result()
   def get_variant(feature, context \\ %{}, fallback \\ Variant.disabled()) do
-    start_metadata = Unleash.Client.telemetry_metadata(%{feature_name: feature, context: context})
+    if Config.disable_client() do
+      fallback
+    else
+      feature
+      |> Repo.get_feature()
+      |> case do
+        nil ->
+          fallback
 
-    :telemetry.span(
-      [:unleash, :variant, :get],
-      start_metadata,
-      fn ->
-        {result, metadata} =
-          if Config.disable_client() do
-            {fallback, %{reason: :disabled_client}}
-          else
-            feature
-            |> Repo.get_feature()
-            |> case do
-              nil ->
-                {fallback, %{reason: :feature_not_found}}
-
-              loaded_feature ->
-                {result, metadata} = Variant.select_variant(loaded_feature, context)
-                Config.metrics_module().add_variant_metric({loaded_feature, result})
-                {result, metadata}
-            end
-          end
-
-        {result, Map.merge(start_metadata, metadata)}
+        loaded_feature ->
+          {result, _metadata} = Variant.select_variant(loaded_feature, context)
+          Config.metrics_module().add_variant_metric({loaded_feature, result})
+          result
       end
-    )
+    end
   end
 
   @doc false

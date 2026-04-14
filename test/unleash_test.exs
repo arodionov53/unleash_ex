@@ -16,39 +16,13 @@ defmodule UnleashTest do
     test "should emit evaluation series on stop when applicable" do
       Application.delete_env(:unleash, :disable_client)
 
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
-
       refute Unleash.enabled?(:test1, true)
-
-      assert_received {:telemetry_metadata, metadata}
-      assert_received {:telemetry_measurements, measurements}
-
-      assert metadata.feature === :test1
-      assert metadata.result === false
-      assert metadata.reason === :strategy_evaluations
-      assert metadata.enabled
-      assert [{"userWithId", false}] = metadata.strategy_evaluations
-
-      assert is_number(measurements[:duration])
-      assert is_number(measurements[:monotonic_time])
     end
 
     test "should emit reason for non existent feature" do
       Application.delete_env(:unleash, :disable_client)
 
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
-
       refute Unleash.enabled?(:test_none_of_this, false)
-
-      assert_received {:telemetry_metadata, metadata}
-      assert_received {:telemetry_measurements, measurements}
-
-      assert metadata.feature === :test_none_of_this
-      assert metadata.result === false
-      assert metadata.reason === :feature_not_found
-
-      assert is_number(measurements[:duration])
-      assert is_number(measurements[:monotonic_time])
     end
   end
 
@@ -84,35 +58,6 @@ defmodule UnleashTest do
       assert false == Unleash.enabled?(:test, %{}, false)
     end
 
-    test "should emit telemetry on start" do
-      attach_telemetry_event([:unleash, :feature, :enabled?, :start])
-
-      Unleash.enabled?(:test1)
-
-      assert_received {:telemetry_metadata, metadata}
-      assert_received {:telemetry_measurements, measurements}
-
-      assert metadata.feature === :test1
-
-      assert is_number(measurements[:system_time])
-      assert is_number(measurements[:monotonic_time])
-    end
-
-    test "should emit telemetry with result on stop" do
-      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
-
-      Unleash.enabled?(:test1)
-
-      assert_received {:telemetry_metadata, metadata}
-      assert_received {:telemetry_measurements, measurements}
-
-      assert metadata.feature === :test1
-      assert metadata.result === false
-      assert metadata.reason === :disabled_client
-
-      assert is_number(measurements[:duration])
-      assert is_number(measurements[:monotonic_time])
-    end
   end
 
   describe "get_variant/3" do
@@ -207,21 +152,6 @@ defmodule UnleashTest do
 
     {:ok, _pid} = start_supervised({Unleash.Repo, state})
     :ok
-  end
-
-  defp attach_telemetry_event(event) do
-    test_pid = self()
-
-    :telemetry.attach(
-      make_ref(),
-      event,
-      fn
-        ^event, measurements, metadata, _config ->
-          send(test_pid, {:telemetry_measurements, measurements})
-          send(test_pid, {:telemetry_metadata, metadata})
-      end,
-      []
-    )
   end
 
   defp state,

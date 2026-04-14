@@ -46,12 +46,10 @@ defmodule Unleash.Repo do
   end
 
   def handle_info({:initialize, etag, retries}, state) do
-    telemetry_metadata = Unleash.Client.telemetry_metadata(%{retries: retries, etag: etag})
-
     if retries > 0 or retries <= -1 do
       cached_features = %Features{features: Cache.get_features()}
 
-      {source, remote_features} =
+      {_source, remote_features} =
         case Unleash.Config.client().features(etag) |> client_adaptor do
           :cached ->
             {:cache, schedule_features(cached_features, etag)}
@@ -65,12 +63,6 @@ defmodule Unleash.Repo do
             {:remote, schedule_features(features, etag)}
         end
 
-      :telemetry.execute(
-        [:unleash, :repo, :features_update],
-        %{},
-        Map.put(telemetry_metadata, :source, source)
-      )
-
       if remote_features === cached_features do
         {:noreply, state}
       else
@@ -79,8 +71,6 @@ defmodule Unleash.Repo do
         {:noreply, state}
       end
     else
-      :telemetry.execute([:unleash, :repo, :disable_polling], telemetry_metadata)
-
       {:noreply, state}
     end
   end
@@ -145,18 +135,7 @@ defmodule Unleash.Repo do
   end
 
   defp schedule_features(features, etag, retries \\ Config.retries()) do
-    :telemetry.execute(
-      [:unleash, :repo, :schedule],
-      %{},
-      Unleash.Client.telemetry_metadata(%{
-        retries: retries,
-        etag: etag,
-        interval: Config.features_period()
-      })
-    )
-
     Process.send_after(self(), {:initialize, etag, retries}, Config.features_period())
-
     features
   end
 end
