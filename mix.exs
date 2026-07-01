@@ -65,9 +65,9 @@ defmodule Unleash.MixProject do
       {:simplehttp, git: "https://github.com/saleyn/simplehttp.git", branch: "master"},
       {:jason, "~> 1.1"},
       {:telemetry, "~> 1.1"},
-      {:plug, "~> 1.8", optional: true},
+      {:plug, "~> 1.14", optional: true},
       {:phoenix_gon, "~> 0.4.0", optional: true},
-      {:finch, "~> 0.20.0"}
+      {:finch, "~> 0.20.0 or ~> 0.21.0 or ~> 0.22.0 or ~> 0.23.0"}
     ]
   end
 
