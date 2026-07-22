@@ -51,6 +51,12 @@ defmodule Mix.Tasks.Benchmark.Metrics do
     else
       Mix.Task.run("app.start")
 
+      # The application only supervises one of Metrics/MetricsFast (chosen via
+      # `fast_metrics` config) - start whichever one isn't already running so
+      # both are available to benchmark regardless of the app's default.
+      ensure_started(Metrics, name: Metrics)
+      ensure_started(MetricsFast, [])
+
       cond do
         options[:compare] ->
           run_comparison_benchmarks(options)
@@ -61,6 +67,13 @@ defmodule Mix.Tasks.Benchmark.Metrics do
         true ->
           run_benchmarks(options)
       end
+    end
+  end
+
+  defp ensure_started(module, opts) do
+    case module.start_link(opts) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
     end
   end
 
@@ -351,9 +364,6 @@ defmodule Mix.Tasks.Benchmark.Metrics do
 
     Comparing GenServer vs Optimized (ETS-based) metrics collection.
     """)
-
-    # Start fast metrics server
-    {:ok, _pid} = MetricsFast.start_link([])
 
     time = if options[:quick], do: 1, else: 3
 

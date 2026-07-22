@@ -6,12 +6,16 @@ This report documents the performance analysis and optimization of the metrics c
 
 ## Test Environment
 
-- **OS**: macOS Darwin 23.6.0
-- **CPU**: Intel Core i9-9980HK @ 2.40GHz (16 cores)
-- **Memory**: 32 GB
-- **Elixir**: 1.18.2
-- **Erlang/OTP**: 27.2.4
-- **JIT**: Disabled
+- **OS**: macOS Darwin 25.5.0
+- **CPU**: Apple M2 Pro (12 cores)
+- **Memory**: 16 GB
+- **Elixir**: 1.20.2
+- **Erlang/OTP**: 29.0.2
+- **JIT**: Enabled
+
+> Note: numbers below were re-run from scratch and are not directly comparable to any prior run of
+> this report on different hardware/Elixir versions — re-run `mix benchmark.metrics` on your own
+> target environment before making capacity decisions.
 
 ## Benchmark Results
 
@@ -23,74 +27,88 @@ The `handle_metric` function is the core logic that updates the metrics state ma
 
 | Operation | Throughput | Avg Time | Memory |
 |-----------|-----------|----------|--------|
-| Non-feature (early return) | 9.11 M/s | 110 ns | 0 B |
-| Enabled: true | 4.09 M/s | 245 ns | 88 B |
-| Enabled: false | 4.75 M/s | 211 ns | 88 B |
+| Non-feature (early return) | 123.48 M/s | 8.10 ns | 0 B |
+| Enabled: true | 16.68 M/s | 59.95 ns | 88 B |
+| Enabled: false | 17.45 M/s | 57.31 ns | 88 B |
 
 #### Map Size Impact
 
 | State Size | Throughput | Avg Time | Memory |
 |------------|-----------|----------|--------|
-| 1 toggle | 3.23 M/s | 310 ns | 112 B |
-| 100 toggles | 2.53 M/s | 395 ns | 288 B |
+| 1 toggle | 11.44 M/s | 87.40 ns | 112 B |
+| 100 toggles | 7.55 M/s | 132.49 ns | 336 B |
 
-**Finding**: Map size has minimal impact (~1.27x slower) due to Elixir's efficient persistent data structures.
+**Finding**: Map size has minimal impact (~1.5x slower) due to Elixir's efficient persistent data structures.
 
 ---
 
 ### 2. add_metric Function (GenServer-based)
 
-The public `add_metric` function uses GenServer.cast for async metric recording.
+The `Unleash.Metrics` module uses `GenServer.cast` for async metric recording.
 
 #### Single Call Performance
 
 | Operation | Throughput | Avg Time | Memory |
 |-----------|-----------|----------|--------|
-| add_metric (enabled: true) | 43.9 K/s | 22.8 μs | 1.72 KB |
-| add_metric (enabled: false) | 44.6 K/s | 22.4 μs | 1.72 KB |
-| add_metric (non-feature) | 44.1 K/s | 22.7 μs | 1.72 KB |
+| add_metric (enabled: true) | 69.55 K/s | 14.38 μs | 1.70 KB |
+| add_metric (enabled: false) | 69.31 K/s | 14.43 μs | 1.70 KB |
+| add_metric (non-feature) | 68.90 K/s | 14.51 μs | 1.70 KB |
 
 #### Stress Test - 100K Calls
 
 | Scenario | Time per 100K | Memory | Per-call |
 |----------|---------------|--------|----------|
-| Single feature | 2.52 s | 3.01 GB | 25.2 μs |
-| Round-robin (10 features) | 2.57 s | 3.01 GB | 25.7 μs |
-| Random feature | 2.60 s | 3.02 GB | 26.0 μs |
+| Single feature | 1.53 s | 3.08 GB | 15.3 μs |
+| Round-robin (10 features) | 1.55 s | 3.08 GB | 15.5 μs |
+| Random feature | 1.56 s | 3.09 GB | 15.6 μs |
 
-**Finding**: GenServer cast overhead (~22 μs) dominates performance. Memory usage is high due to message queue buildup.
+**Finding**: GenServer cast overhead (~14 μs) dominates performance. Memory usage is high due to message queue buildup.
 
 ---
 
 ### 3. Optimized Implementation (MetricsFast)
 
-A new ETS-based implementation using `:counters` for lock-free atomic updates.
+`Unleash.MetricsFast` is an ETS-based implementation using `:counters` for lock-free atomic updates.
+It is now the **default** metrics module (`fast_metrics: true`, see `lib/unleash/config.ex`).
 
 #### Single Call Performance
 
 | Implementation | Throughput | Avg Time | Memory |
 |----------------|-----------|----------|--------|
-| **MetricsFast** | **1.79 M/s** | **0.56 μs** | **0.156 KB** |
-| Metrics (GenServer) | 42 K/s | 23.9 μs | 1.72 KB |
+| **MetricsFast** | **6.88 M/s** | **0.145 μs** | **0.156 KB** |
+| Metrics (GenServer) | 68.8 K/s | 14.54 μs | 1.70 KB |
 
 #### Stress Test - 100K Calls
 
 | Implementation | Time per 100K | Memory | Per-call |
 |----------------|---------------|--------|----------|
-| **MetricsFast** | **59 ms** | **20 MB** | **0.59 μs** |
-| Metrics (GenServer) | 2.50 s | 3.01 GB | 25.0 μs |
+| **MetricsFast** | **16.1 ms** | **20.1 MB** | **0.161 μs** |
+| Metrics (GenServer) | 1.64 s | 3.08 GB | 16.4 μs |
+
+#### Direct Counter Comparison (no Config/Enum overhead)
+
+An additional micro-benchmark isolates the raw `:counters.add/3` call from the rest of
+`MetricsFast`'s hot path (ETS lookup, config check, feature struct pattern match) against the raw
+`handle_metric` map-update logic used internally by `Unleash.Metrics`:
+
+| Implementation | Throughput | Avg Time (100K) | Memory |
+|----------------|-----------|------------------|--------|
+| Direct `:counters.add/3` | 653.57/s | 1.53 ms | 1.53 MB |
+| Direct `handle_metric` (map update) | 71.10/s | 14.06 ms | 19.04 MB |
+
+This isolates *why* `MetricsFast` is fast: the atomic counter increment itself is ~9x cheaper than
+the map-rebuild `handle_metric` does per call, before any GenServer messaging is even considered.
 
 ---
 
 ## Performance Comparison Summary
 
-| Metric | GenServer (Default) | MetricsFast (Optimized) | Improvement |
+| Metric | GenServer (Legacy) | MetricsFast (Default) | Improvement |
 |--------|---------------------|-------------------------|-------------|
-| Single call latency | 23.9 μs | 0.56 μs | **43x faster** |
-| 100K calls duration | 2.50 s | 59 ms | **42x faster** |
-| Memory (100K calls) | 3.01 GB | 20 MB | **150x less** |
-| Throughput | 42 K/s | 1.79 M/s | **43x higher** |
-| Max sustainable rate | ~40K/s | ~1.8M/s | **45x higher** |
+| Single call latency | 14.54 μs | 0.145 μs | **~100x faster** |
+| 100K calls duration | 1.64 s | 16.1 ms | **~102x faster** |
+| Memory (100K calls) | 3.08 GB | 20.1 MB | **~153x less** |
+| Throughput | 68.8 K/s | 6.88 M/s | **~100x higher** |
 
 ---
 
@@ -98,7 +116,7 @@ A new ETS-based implementation using `:counters` for lock-free atomic updates.
 
 ### GenServer Implementation Bottlenecks
 
-1. **Message Passing Overhead**: Each `GenServer.cast` requires message serialization and copying between processes (~20 μs overhead)
+1. **Message Passing Overhead**: Each `GenServer.cast` requires message serialization and copying between processes (~14 μs overhead on this hardware)
 
 2. **Single Process Serialization**: All metrics flow through one GenServer, creating a serialization point
 
@@ -149,11 +167,13 @@ A new ETS-based implementation using `:counters` for lock-free atomic updates.
 
 1. **Separation of Concerns**: Hot path (counter updates) is decoupled from cold path (sending metrics)
 
-2. **Pre-registration**: Features are registered when loaded from server, avoiding runtime counter creation
+2. **Pre-registration**: Features are registered when loaded from server (`Unleash.Repo` calls
+   `MetricsFast.register_features/1` after every features refresh, gated on `Config.fast_metrics()`),
+   avoiding runtime counter creation
 
 3. **Atomic Counters**: Uses Erlang's `:counters` module for lock-free concurrent updates
 
-4. **Minimal Allocations**: Each `add_metric` call allocates only 160 bytes vs 1.72 KB for GenServer
+4. **Minimal Allocations**: Each `add_metric` call allocates only ~156 bytes vs 1.70 KB for GenServer
 
 ---
 
@@ -161,7 +181,9 @@ A new ETS-based implementation using `:counters` for lock-free atomic updates.
 
 ### Default Configuration
 
-As of this update, `fast_metrics: true` is the **default** setting. No configuration change is needed to use the optimized implementation.
+`fast_metrics: true` is the **default** setting (`lib/unleash/config.ex`). No configuration change
+is needed to use the optimized implementation; `Unleash.start/2` picks the child spec
+(`Unleash.MetricsFast` vs `Unleash.Metrics`) accordingly.
 
 ### Disable Fast Metrics (if needed)
 
@@ -186,6 +208,13 @@ mix benchmark.metrics --stress
 # Profile add_metric specifically
 mix benchmark.metrics --add-metric --stress
 ```
+
+> `MIX_ENV=dev` is required (the task calls `Mix.Task.run("app.start")`). `config/runtime.exs`
+> unconditionally requires an `UNLEASH_AUTH_TOKEN` env var to boot in this environment — set it to
+> any placeholder value when benchmarking locally, e.g. `UNLEASH_AUTH_TOKEN=dummy mix benchmark.metrics --compare`.
+> No real Unleash server is contacted by the benchmark itself, so the value doesn't matter; you may
+> see harmless `Failed to register unleash client` warnings in the log from the app's own background
+> registration attempts against `config/dev.exs`'s `http://localhost:4242/api/`.
 
 ---
 
@@ -212,21 +241,32 @@ mix benchmark.metrics --add-metric --stress
 
 ---
 
-## Files Changed
+## Files Changed (this benchmarking pass)
 
 | File | Change |
 |------|--------|
-| `lib/unleash/metrics_fast.ex` | New optimized metrics module |
-| `lib/unleash/config.ex` | Added `fast_metrics` config option |
+| `lib/mix/tasks/benchmark.metrics.ex` | Fixed `--compare` crash: the task assumed both `Unleash.Metrics` and `Unleash.MetricsFast` are started by the application, but `Unleash.start/2` only supervises one (chosen by `fast_metrics`). Now explicitly starts whichever of the two isn't already running, tolerating `{:already_started, _}`. |
+| `BENCHMARK_REPORT.md` | Re-ran and refreshed all figures on current hardware/Elixir/OTP. |
+
+Files from the original optimization work (unchanged by this pass, listed for reference):
+
+| File | Change |
+|------|--------|
+| `lib/unleash/metrics_fast.ex` | Optimized metrics module |
+| `lib/unleash/config.ex` | `fast_metrics` config option |
 | `lib/unleash.ex` | Configurable metrics module selection |
 | `lib/unleash/repo.ex` | Auto-registers features with MetricsFast |
-| `lib/mix/tasks/benchmark.metrics.ex` | Benchmark task for profiling |
-| `mix.exs` | Added Benchee dependency |
+| `mix.exs` | Benchee dependency |
 
 ---
 
 ## Conclusion
 
-The optimized `MetricsFast` implementation provides **43x better throughput** and **150x lower memory usage** compared to the default GenServer-based approach. This makes the Unleash client suitable for high-performance, high-throughput applications where feature flag checks occur at very high rates.
+The optimized `MetricsFast` implementation provides **~100x better throughput** and **~150x lower
+memory usage** compared to the default GenServer-based approach, consistent with the original
+findings and reproduced independently on different hardware (Apple M2 Pro, Elixir 1.20.2,
+Erlang/OTP 29). This makes the Unleash client suitable for high-performance, high-throughput
+applications where feature flag checks occur at very high rates.
 
-The optimization is backward-compatible and can be enabled via a simple configuration change without any code modifications to existing applications.
+The optimization is backward-compatible and can be disabled via a simple configuration change
+without any code modifications to existing applications.
