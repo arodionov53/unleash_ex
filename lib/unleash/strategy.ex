@@ -43,13 +43,15 @@ defmodule Unleash.Strategy do
 
       @doc false
       def check_enabled(params \\ %{}, context) do
-        case enabled?(params, context) do
-          {result, _used_opts} -> result
-          result -> result
-        end
+        Unleash.Strategy.normalize_enabled(enabled?(params, context))
       end
     end
   end
+
+  @doc false
+  @spec normalize_enabled(boolean() | {boolean(), map()}) :: boolean()
+  def normalize_enabled({result, _used_opts}), do: result
+  def normalize_enabled(result), do: result
 
   @doc """
   You can implmenet this callback a couple of ways, returning a bare `boolean()`
