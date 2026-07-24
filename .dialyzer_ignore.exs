@@ -11,6 +11,11 @@
   ~r/Protocol\.UndefinedError.*String\.Chars/,
   ~r/Unknown error occurred.*Protocol\.UndefinedError/,
 
+  # Unleash.MetricsFast.CounterIndex/VariantIndex only exist once
+  # Exfoil.Maps.convert/2 has compiled them at runtime (see
+  # Unleash.MetricsFast.recompile/2) - dialyzer's PLT never sees them.
+  ~r/Unknown function.*Unleash\.MetricsFast\.(Counter|Variant)Index.*:(fetch|all|to_map)/,
+
   # Pattern matching warnings (false positives)
   ~r/pattern_match_cov/,
   ~r/The pattern.*can never match.*previous clauses completely cover/,

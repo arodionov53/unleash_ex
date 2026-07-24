@@ -69,6 +69,7 @@ defmodule Unleash.MixProject do
       {:mox, "~> 1.1", only: :test},
       {:recase, "~> 0.7"},
       {:simplehttp, git: "https://github.com/saleyn/simplehttp.git", branch: "master"},
+      {:exfoil, git: "https://github.com/arodionov53/exfoil.git", branch: "main"},
       {:jason, "~> 1.1"},
       {:telemetry, "~> 1.1"},
       {:plug, "~> 1.14", optional: true},
