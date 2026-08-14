@@ -30,7 +30,7 @@ defmodule Unleash.Strategy do
 
     {_, new_map3} =
       Map.get_and_update(new_map2, "constraints", fn constraints ->
-        {constraints, Enum.map(constraints || [], &Constraint.precompute_context_atom/1)}
+        {constraints, Enum.map(constraints || [], &Constraint.precompute/1)}
       end)
 
     new_map3

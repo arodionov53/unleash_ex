@@ -510,6 +510,122 @@ defmodule Unleash.Strategy.ConstraintTest do
     end
   end
 
+  describe "precompute/1" do
+    test "overwrites value with parsed number for NUM_EQ constraint" do
+      constraint = mk_constraint(%{"operator" => "NUM_EQ", "value" => "42"})
+      precomputed = Constraint.precompute(constraint)
+      assert precomputed["value"] == 42
+      assert Map.has_key?(precomputed, "contextNameAtom")
+    end
+
+    test "overwrites value with parsed float for NUM_GT" do
+      constraint = mk_constraint(%{"operator" => "NUM_GT", "value" => "3.14"})
+      precomputed = Constraint.precompute(constraint)
+      assert precomputed["value"] == 3.14
+    end
+
+    test "overwrites value with parsed semver tuple for SEMVER_EQ constraint" do
+      constraint = mk_constraint(%{"operator" => "SEMVER_EQ", "value" => "1.2.3"})
+      precomputed = Constraint.precompute(constraint)
+      assert precomputed["value"] == {1, 2, 3}
+    end
+
+    test "overwrites value with semver tuple, pre-release metadata stripped" do
+      constraint = mk_constraint(%{"operator" => "SEMVER_GT", "value" => "2.0.0-beta+build"})
+      precomputed = Constraint.precompute(constraint)
+      assert precomputed["value"] == {2, 0, 0}
+    end
+
+    test "overwrites value with parsed datetime for DATE_AFTER constraint" do
+      constraint = mk_constraint(%{"operator" => "DATE_AFTER", "value" => "2023-01-15T10:00:00Z"})
+      precomputed = Constraint.precompute(constraint)
+      assert {:ok, %DateTime{}, 0} = precomputed["value"]
+    end
+
+    test "does not modify value for IN operator" do
+      constraint = mk_constraint(%{"operator" => "IN", "values" => ["a", "b"]})
+      precomputed = Constraint.precompute(constraint)
+      # value remains the default empty string from mk_constraint
+      assert precomputed["value"] == ""
+    end
+
+    test "verify_all/2 gives identical results with and without precomputed numeric values" do
+      constraint = mk_constraint(%{
+        "contextName" => "buildNumber",
+        "operator" => "NUM_GTE",
+        "value" => "100"
+      })
+
+      precomputed = Constraint.precompute(constraint)
+      context = %{build_number: "150"}
+
+      assert Constraint.verify_all([constraint], context) ==
+               Constraint.verify_all([precomputed], context)
+
+      assert Constraint.verify_all([precomputed], context) == true
+    end
+
+    test "verify_all/2 gives identical results with and without precomputed semver values" do
+      constraint = mk_constraint(%{
+        "contextName" => "appVersion",
+        "operator" => "SEMVER_GT",
+        "value" => "1.0.0"
+      })
+
+      precomputed = Constraint.precompute(constraint)
+      context = %{app_version: "2.1.0"}
+
+      assert Constraint.verify_all([constraint], context) ==
+               Constraint.verify_all([precomputed], context)
+
+      assert Constraint.verify_all([precomputed], context) == true
+    end
+
+    test "Strategy.update_map/1 now pre-parses constraint values in place" do
+      strategy =
+        Unleash.Strategy.update_map(%{
+          "name" => "default",
+          "constraints" => [
+            %{
+              "contextName" => "version",
+              "operator" => "SEMVER_EQ",
+              "value" => "3.2.1",
+              "inverted" => false
+            }
+          ]
+        })
+
+      assert [%{"value" => {3, 2, 1}, "contextNameAtom" => :version}] =
+               strategy["constraints"]
+    end
+  end
+
+  describe "mk_semver/1 edge cases" do
+    test "returns :error for completely invalid input" do
+      assert :error == Constraint.mk_semver("not-a-version")
+    end
+
+    test "handles version with pre-release suffix" do
+      assert {1, 2, 3} == Constraint.mk_semver("1.2.3-beta")
+    end
+
+    test "handles version with build metadata" do
+      assert {1, 2, 3} == Constraint.mk_semver("1.2.3+build.123")
+    end
+
+    test "handles version with both pre-release and build" do
+      assert {1, 2, 3} == Constraint.mk_semver("1.2.3-rc.1+build.456")
+    end
+
+    test "handles single-segment version" do
+      assert {5, 0, 0} == Constraint.mk_semver("5")
+    end
+
+    test "handles two-segment version" do
+      assert {2, 3, 0} == Constraint.mk_semver("2.3")
+    end
+  end
+
   defp mk_constraint(), do: mk_constraint(%{})
 
   defp mk_constraint(map) do
