@@ -22,9 +22,8 @@ defmodule UnleashTest do
 
       assert metadata.feature === :test1
       assert metadata.result === false
-      assert metadata.reason === :strategy_evaluations
+      assert metadata.reason === :compiled_eval
       assert metadata.enabled
-      assert [{"userWithId", false}] = metadata.strategy_evaluations
 
       assert is_number(measurements[:duration])
       assert is_number(measurements[:monotonic_time])

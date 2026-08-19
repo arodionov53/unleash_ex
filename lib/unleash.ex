@@ -17,7 +17,7 @@ defmodule Unleash do
   use Application
 
   alias Unleash.Config
-  alias Unleash.Feature
+  alias Unleash.FeatureCompiler
   alias Unleash.Metrics
   alias Unleash.MetricsFast
   alias Unleash.Repo
@@ -98,35 +98,7 @@ defmodule Unleash do
       [:unleash, :feature, :enabled?],
       start_metadata,
       fn ->
-        {result, metadata} =
-          if Config.disable_client() do
-            {default, %{reason: :disabled_client}}
-          else
-            feature
-            |> Repo.get_feature()
-            |> case do
-              nil ->
-                {default, %{reason: :feature_not_found}}
-
-              loaded_feature ->
-                {result, strategy_evaluations} =
-                  Feature.enabled?(
-                    loaded_feature,
-                    Map.put(context, :feature_toggle, loaded_feature.name)
-                  )
-
-                Config.metrics_module().add_metric({loaded_feature, result})
-
-                metadata = %{
-                  feature_name: loaded_feature.name,
-                  reason: :strategy_evaluations,
-                  strategy_evaluations: strategy_evaluations,
-                  enabled: loaded_feature.enabled
-                }
-
-                {result, metadata}
-            end
-          end
+        {result, metadata} = do_enabled(feature, context, default)
 
         telemetry_metadata =
           start_metadata
@@ -136,6 +108,30 @@ defmodule Unleash do
         {result, telemetry_metadata}
       end
     )
+  end
+
+  defp do_enabled(feature, context, default) do
+    if Config.disable_client() do
+      {default, %{reason: :disabled_client}}
+    else
+      eval_compiled(to_string(feature), context, default)
+    end
+  end
+
+  defp eval_compiled(feature_name, context, default) do
+    case FeatureCompiler.get(feature_name) do
+      nil ->
+        {default, %{reason: :feature_not_found}}
+
+      %{enabled: false, feature: f} ->
+        Config.metrics_module().add_metric({f, false})
+        {false, %{feature_name: f.name, reason: :compiled_eval, enabled: false}}
+
+      %{eval: eval, feature: f} ->
+        result = eval.(Map.put(context, :feature_toggle, f.name))
+        Config.metrics_module().add_metric({f, result})
+        {result, %{feature_name: f.name, reason: :compiled_eval, enabled: true}}
+    end
   end
 
   @doc """
@@ -165,26 +161,30 @@ defmodule Unleash do
       [:unleash, :variant, :get],
       start_metadata,
       fn ->
-        {result, metadata} =
-          if Config.disable_client() do
-            {fallback, %{reason: :disabled_client}}
-          else
-            feature
-            |> Repo.get_feature()
-            |> case do
-              nil ->
-                {fallback, %{reason: :feature_not_found}}
-
-              loaded_feature ->
-                {result, metadata} = Variant.select_variant(loaded_feature, context)
-                Config.metrics_module().add_variant_metric({loaded_feature, result})
-                {result, metadata}
-            end
-          end
-
+        {result, metadata} = do_get_variant(feature, context, fallback)
         {result, Map.merge(start_metadata, metadata)}
       end
     )
+  end
+
+  defp do_get_variant(feature, context, fallback) do
+    if Config.disable_client() do
+      {fallback, %{reason: :disabled_client}}
+    else
+      eval_variant(to_string(feature), context, fallback)
+    end
+  end
+
+  defp eval_variant(feature_name, context, fallback) do
+    case FeatureCompiler.get(feature_name) do
+      nil ->
+        {fallback, %{reason: :feature_not_found}}
+
+      %{feature: loaded_feature} ->
+        {result, metadata} = Variant.select_variant(loaded_feature, context)
+        Config.metrics_module().add_variant_metric({loaded_feature, result})
+        {result, metadata}
+    end
   end
 
   @doc false
