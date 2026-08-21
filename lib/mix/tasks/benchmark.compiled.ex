@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Benchmark.Compiled do
   @moduledoc """
-  Benchmarks compiled-closure evaluation vs. the ETS+interpret path.
+  Benchmarks code-generated module evaluation vs. the ETS+interpret path.
 
   Usage:
       mix benchmark.compiled
@@ -8,13 +8,15 @@ defmodule Mix.Tasks.Benchmark.Compiled do
 
   use Mix.Task
 
+  @compile {:no_warn_undefined, Unleash.CompiledFeatures}
+
   alias Unleash.Cache
   alias Unleash.Feature
   alias Unleash.FeatureCompiler
   alias Unleash.Strategy
   alias Unleash.Strategy.Constraint
 
-  @shortdoc "Benchmark compiled closures vs ETS-based feature evaluation"
+  @shortdoc "Benchmark generated-module vs ETS-based feature evaluation"
 
   def run(_args) do
     Mix.Task.run("app.start", ["--no-start"])
@@ -26,16 +28,15 @@ defmodule Mix.Tasks.Benchmark.Compiled do
 
     context = %{user_id: "50", session_id: "sess-123", remote_address: "10.0.0.1"}
 
-    IO.puts("\n=== Compiled-Closure Benchmark ===\n")
+    IO.puts("\n=== Code-Generated Module Benchmark ===\n")
     IO.puts("Features: #{length(features)}")
     IO.puts("Context: #{inspect(context)}\n")
 
     Benchee.run(
       %{
-        "compiled (persistent_term + closure)" => fn ->
+        "generated module (Module.create)" => fn ->
           Enum.each(features, fn f ->
-            compiled = FeatureCompiler.get(f.name)
-            compiled.eval.(Map.put(context, :feature_toggle, f.name))
+            Unleash.CompiledFeatures.enabled?(f.name, context)
           end)
         end,
         "ets + interpret (current main path)" => fn ->

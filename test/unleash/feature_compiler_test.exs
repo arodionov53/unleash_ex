@@ -1,39 +1,38 @@
 defmodule Unleash.FeatureCompilerTest do
   use ExUnit.Case, async: true
 
+  @compile {:no_warn_undefined, Unleash.CompiledFeatures}
+
   alias Unleash.Feature
   alias Unleash.FeatureCompiler
 
   setup do
-    # Clean up persistent_term keys after each test
     on_exit(fn ->
       for name <- :persistent_term.get(:unleash_compiled_names, []) do
-        :persistent_term.erase({:unleash_compiled, name})
+        :persistent_term.erase({:unleash_feature, name})
       end
 
       :persistent_term.erase(:unleash_compiled_names)
+      :code.purge(Unleash.CompiledFeatures)
+      :code.delete(Unleash.CompiledFeatures)
     end)
 
     :ok
   end
 
   describe "compile_all/1" do
-    test "compiles a disabled feature into a closure that returns false" do
+    test "compiles a disabled feature — enabled? returns false" do
       feature = %Feature{name: "disabled_feat", enabled: false}
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("disabled_feat")
-      assert compiled.enabled == false
-      assert compiled.eval.(%{}) == false
+      assert Unleash.CompiledFeatures.enabled?("disabled_feat", %{}) == false
     end
 
-    test "compiles an enabled feature with no strategies to return true" do
+    test "compiles an enabled feature with no strategies — returns true" do
       feature = %Feature{name: "always_on", enabled: true, strategies: []}
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("always_on")
-      assert compiled.enabled == true
-      assert compiled.eval.(%{}) == true
+      assert Unleash.CompiledFeatures.enabled?("always_on", %{}) == true
     end
 
     test "compiles a feature with default strategy" do
@@ -47,8 +46,7 @@ defmodule Unleash.FeatureCompilerTest do
 
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("with_default")
-      assert compiled.eval.(%{}) == true
+      assert Unleash.CompiledFeatures.enabled?("with_default", %{}) == true
     end
 
     test "compiles a feature with userWithId strategy" do
@@ -66,9 +64,8 @@ defmodule Unleash.FeatureCompilerTest do
 
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("user_check")
-      assert compiled.eval.(%{user_id: "2"}) == true
-      assert compiled.eval.(%{user_id: "99"}) == false
+      assert Unleash.CompiledFeatures.enabled?("user_check", %{user_id: "2"}) == true
+      assert Unleash.CompiledFeatures.enabled?("user_check", %{user_id: "99"}) == false
     end
 
     test "compiles a feature with NUM_LTE constraint" do
@@ -95,14 +92,13 @@ defmodule Unleash.FeatureCompilerTest do
 
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("num_constrained")
       # user_id 50 <= 100 → passes constraint → default strategy → true
-      assert compiled.eval.(%{user_id: "50"}) == true
+      assert Unleash.CompiledFeatures.enabled?("num_constrained", %{user_id: "50"}) == true
       # user_id 200 > 100 → fails constraint → false
-      assert compiled.eval.(%{user_id: "200"}) == false
+      assert Unleash.CompiledFeatures.enabled?("num_constrained", %{user_id: "200"}) == false
     end
 
-    test "precomputes NUM constraint values (no string parsing at eval time)" do
+    test "precomputes NUM constraint values" do
       feature = %Feature{
         name: "precomputed_num",
         enabled: true,
@@ -126,9 +122,8 @@ defmodule Unleash.FeatureCompilerTest do
 
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("precomputed_num")
-      assert compiled.eval.(%{user_id: "100"}) == true
-      assert compiled.eval.(%{user_id: "10"}) == false
+      assert Unleash.CompiledFeatures.enabled?("precomputed_num", %{user_id: "100"}) == true
+      assert Unleash.CompiledFeatures.enabled?("precomputed_num", %{user_id: "10"}) == false
     end
 
     test "handles IN constraint" do
@@ -155,47 +150,106 @@ defmodule Unleash.FeatureCompilerTest do
 
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("in_constrained")
-      assert compiled.eval.(%{user_id: "alice"}) == true
-      assert compiled.eval.(%{user_id: "charlie"}) == false
+      assert Unleash.CompiledFeatures.enabled?("in_constrained", %{user_id: "alice"}) == true
+      assert Unleash.CompiledFeatures.enabled?("in_constrained", %{user_id: "charlie"}) == false
     end
 
     test "stores feature struct for variant access" do
       feature = %Feature{name: "with_variants", enabled: true, strategies: []}
       FeatureCompiler.compile_all([feature])
 
-      compiled = FeatureCompiler.get("with_variants")
-      assert compiled.feature == feature
+      assert FeatureCompiler.get_feature("with_variants") == feature
+    end
+
+    test "handles inverted constraints" do
+      feature = %Feature{
+        name: "inverted",
+        enabled: true,
+        strategies: [
+          %{
+            "name" => "default",
+            "parameters" => %{},
+            "constraints" => [
+              %{
+                "contextName" => "userId",
+                "operator" => "IN",
+                "value" => "",
+                "values" => ["blocked"],
+                "inverted" => true,
+                "caseInsensitive" => false
+              }
+            ]
+          }
+        ]
+      }
+
+      FeatureCompiler.compile_all([feature])
+
+      # "blocked" is in the list but inverted → false
+      assert Unleash.CompiledFeatures.enabled?("inverted", %{user_id: "blocked"}) == false
+      # "allowed" is not in the list, inverted → true
+      assert Unleash.CompiledFeatures.enabled?("inverted", %{user_id: "allowed"}) == true
+    end
+
+    test "handles multiple strategies with OR semantics" do
+      feature = %Feature{
+        name: "multi_strat",
+        enabled: true,
+        strategies: [
+          %{
+            "name" => "userWithId",
+            "parameters" => %{"userIds" => "1,2"},
+            "constraints" => []
+          },
+          %{
+            "name" => "default",
+            "parameters" => %{},
+            "constraints" => []
+          }
+        ]
+      }
+
+      FeatureCompiler.compile_all([feature])
+
+      # Even if userWithId fails, default always passes (OR semantics)
+      assert Unleash.CompiledFeatures.enabled?("multi_strat", %{user_id: "99"}) == true
     end
   end
 
-  describe "get/1" do
+  describe "enabled?/2 fallback" do
     test "returns nil for unknown features" do
-      assert FeatureCompiler.get("nonexistent") == nil
+      FeatureCompiler.compile_all([%Feature{name: "known", enabled: true, strategies: []}])
+      assert Unleash.CompiledFeatures.enabled?("nonexistent", %{}) == nil
+    end
+  end
+
+  describe "get_feature/1" do
+    test "returns nil for unknown features" do
+      assert FeatureCompiler.get_feature("nonexistent") == nil
     end
 
     test "accepts atom names" do
       feature = %Feature{name: "atom_test", enabled: true, strategies: []}
       FeatureCompiler.compile_all([feature])
 
-      assert FeatureCompiler.get(:atom_test) != nil
+      assert FeatureCompiler.get_feature(:atom_test) != nil
     end
   end
 
   describe "cleanup/1" do
-    test "removes stale compiled entries" do
+    test "removes stale persistent_term entries" do
       features = [
         %Feature{name: "keep", enabled: true, strategies: []},
         %Feature{name: "remove_me", enabled: true, strategies: []}
       ]
 
       FeatureCompiler.compile_all(features)
-      assert FeatureCompiler.get("remove_me") != nil
+      assert FeatureCompiler.get_feature("remove_me") != nil
 
       # Now only "keep" exists
       FeatureCompiler.cleanup([%Feature{name: "keep", enabled: true}])
-      assert FeatureCompiler.get("remove_me") == nil
-      assert FeatureCompiler.get("keep") != nil
+      assert FeatureCompiler.get_feature("remove_me") == nil
+      assert FeatureCompiler.get_feature("keep") != nil
     end
   end
 end

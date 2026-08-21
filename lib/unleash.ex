@@ -16,6 +16,8 @@ defmodule Unleash do
 
   use Application
 
+  @compile {:no_warn_undefined, Unleash.CompiledFeatures}
+
   alias Unleash.Config
   alias Unleash.FeatureCompiler
   alias Unleash.Metrics
@@ -119,18 +121,22 @@ defmodule Unleash do
   end
 
   defp eval_compiled(feature_name, context, default) do
-    case FeatureCompiler.get(feature_name) do
+    unless FeatureCompiler.compiled?() do
+      {default, %{reason: :feature_not_found}}
+    else
+      do_eval_compiled(feature_name, context, default)
+    end
+  end
+
+  defp do_eval_compiled(feature_name, context, default) do
+    case Unleash.CompiledFeatures.enabled?(feature_name, context) do
       nil ->
         {default, %{reason: :feature_not_found}}
 
-      %{enabled: false, feature: f} ->
-        Config.metrics_module().add_metric({f, false})
-        {false, %{feature_name: f.name, reason: :compiled_eval, enabled: false}}
-
-      %{eval: eval, feature: f} ->
-        result = eval.(Map.put(context, :feature_toggle, f.name))
-        Config.metrics_module().add_metric({f, result})
-        {result, %{feature_name: f.name, reason: :compiled_eval, enabled: true}}
+      result when is_boolean(result) ->
+        f = FeatureCompiler.get_feature(feature_name)
+        if f, do: Config.metrics_module().add_metric({f, result})
+        {result, %{feature_name: feature_name, reason: :compiled_eval, enabled: f && f.enabled}}
     end
   end
 
@@ -176,14 +182,18 @@ defmodule Unleash do
   end
 
   defp eval_variant(feature_name, context, fallback) do
-    case FeatureCompiler.get(feature_name) do
-      nil ->
-        {fallback, %{reason: :feature_not_found}}
+    if FeatureCompiler.compiled?() do
+      case FeatureCompiler.get_feature(feature_name) do
+        nil ->
+          {fallback, %{reason: :feature_not_found}}
 
-      %{feature: loaded_feature} ->
-        {result, metadata} = Variant.select_variant(loaded_feature, context)
-        Config.metrics_module().add_variant_metric({loaded_feature, result})
-        {result, metadata}
+        loaded_feature ->
+          {result, metadata} = Variant.select_variant(loaded_feature, context)
+          Config.metrics_module().add_variant_metric({loaded_feature, result})
+          {result, metadata}
+      end
+    else
+      {fallback, %{reason: :feature_not_found}}
     end
   end
 
