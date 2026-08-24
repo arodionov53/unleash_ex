@@ -13,6 +13,7 @@ defmodule Unleash.Config do
     custom_http_headers: [],
     disable_client: false,
     disable_metrics: false,
+    disable_telemetry: true,
     fast_metrics: true,
     retries: -1,
     client: Unleash.Client,
@@ -91,6 +92,8 @@ defmodule Unleash.Config do
   def disable_client, do: application_env(:disable_client)
 
   def disable_metrics, do: application_env(:disable_metrics)
+
+  def disable_telemetry, do: application_env(:disable_telemetry)
 
   def fast_metrics, do: application_env(:fast_metrics)
 

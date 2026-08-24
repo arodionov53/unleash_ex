@@ -94,22 +94,27 @@ defmodule Unleash do
   """
   @spec enabled?(atom() | String.t(), map(), boolean) :: boolean
   def enabled?(feature, context \\ %{}, default \\ false) do
-    start_metadata = Unleash.Client.telemetry_metadata(%{feature: feature, context: context})
+    if Config.disable_telemetry() do
+      {result, _metadata} = do_enabled(feature, context, default)
+      result
+    else
+      start_metadata = Unleash.Client.telemetry_metadata(%{feature: feature, context: context})
 
-    :telemetry.span(
-      [:unleash, :feature, :enabled?],
-      start_metadata,
-      fn ->
-        {result, metadata} = do_enabled(feature, context, default)
+      :telemetry.span(
+        [:unleash, :feature, :enabled?],
+        start_metadata,
+        fn ->
+          {result, metadata} = do_enabled(feature, context, default)
 
-        telemetry_metadata =
-          start_metadata
-          |> Map.merge(metadata)
-          |> Map.put(:result, result)
+          telemetry_metadata =
+            start_metadata
+            |> Map.merge(metadata)
+            |> Map.put(:result, result)
 
-        {result, telemetry_metadata}
-      end
-    )
+          {result, telemetry_metadata}
+        end
+      )
+    end
   end
 
   defp do_enabled(feature, context, default) do
@@ -161,16 +166,21 @@ defmodule Unleash do
   """
   @spec get_variant(atom() | String.t(), map(), Variant.result()) :: Variant.result()
   def get_variant(feature, context \\ %{}, fallback \\ Variant.disabled()) do
-    start_metadata = Unleash.Client.telemetry_metadata(%{feature_name: feature, context: context})
+    if Config.disable_telemetry() do
+      {result, _metadata} = do_get_variant(feature, context, fallback)
+      result
+    else
+      start_metadata = Unleash.Client.telemetry_metadata(%{feature_name: feature, context: context})
 
-    :telemetry.span(
-      [:unleash, :variant, :get],
-      start_metadata,
-      fn ->
-        {result, metadata} = do_get_variant(feature, context, fallback)
-        {result, Map.merge(start_metadata, metadata)}
-      end
-    )
+      :telemetry.span(
+        [:unleash, :variant, :get],
+        start_metadata,
+        fn ->
+          {result, metadata} = do_get_variant(feature, context, fallback)
+          {result, Map.merge(start_metadata, metadata)}
+        end
+      )
+    end
   end
 
   defp do_get_variant(feature, context, fallback) do

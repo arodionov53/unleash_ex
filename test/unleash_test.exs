@@ -130,6 +130,43 @@ defmodule UnleashTest do
     end
   end
 
+  describe "disable_telemetry" do
+    setup do
+      stop_supervised(Unleash.Repo)
+      saved_client = Application.get_env(:unleash, :disable_client)
+      saved_telemetry = Application.get_env(:unleash, :disable_telemetry)
+      Application.put_env(:unleash, :disable_client, true)
+      Application.put_env(:unleash, :disable_telemetry, true)
+
+      on_exit(fn ->
+        Application.put_env(:unleash, :disable_client, saved_client)
+        Application.put_env(:unleash, :disable_telemetry, saved_telemetry || false)
+      end)
+
+      :ok
+    end
+
+    test "enabled?/3 skips telemetry when disable_telemetry is true" do
+      attach_telemetry_event([:unleash, :feature, :enabled?, :start])
+      attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
+
+      assert false == Unleash.enabled?(:test1)
+
+      refute_received {:telemetry_metadata, _}
+      refute_received {:telemetry_measurements, _}
+    end
+
+    test "get_variant/3 skips telemetry when disable_telemetry is true" do
+      attach_telemetry_event([:unleash, :variant, :get, :start])
+      attach_telemetry_event([:unleash, :variant, :get, :stop])
+
+      assert true == Unleash.get_variant(:variant, %{}, true)
+
+      refute_received {:telemetry_metadata, _}
+      refute_received {:telemetry_measurements, _}
+    end
+  end
+
   describe "start/1" do
     test "it should listen to configuration when starting the supervisor tree" do
       Unleash.ClientMock
