@@ -40,6 +40,7 @@ defmodule Unleash.FeatureCompiler do
     end)
 
     :persistent_term.put(:unleash_compiled_names, Enum.map(features, & &1.name))
+    :persistent_term.put(:unleash_features_compiled, true)
     :ok
   end
 
@@ -72,10 +73,12 @@ defmodule Unleash.FeatureCompiler do
 
   @doc """
   Checks if the compiled module is loaded and available.
+  Uses a persistent_term flag set by compile_all/1 to avoid
+  the code server round-trip of Code.ensure_loaded?/1.
   """
   @spec compiled?() :: boolean()
   def compiled? do
-    Code.ensure_loaded?(@compiled_module)
+    :persistent_term.get(:unleash_features_compiled, false)
   end
 
   # -- AST generation --
