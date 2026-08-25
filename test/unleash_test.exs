@@ -12,6 +12,7 @@ defmodule UnleashTest do
 
     test "should emit evaluation series on stop when applicable" do
       Application.delete_env(:unleash, :disable_client)
+      Application.put_env(:unleash, :disable_telemetry, false)
 
       attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
 
@@ -31,6 +32,7 @@ defmodule UnleashTest do
 
     test "should emit reason for non existent feature" do
       Application.delete_env(:unleash, :disable_client)
+      Application.put_env(:unleash, :disable_telemetry, false)
 
       attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
 
@@ -81,6 +83,7 @@ defmodule UnleashTest do
     end
 
     test "should emit telemetry on start" do
+      Application.put_env(:unleash, :disable_telemetry, false)
       attach_telemetry_event([:unleash, :feature, :enabled?, :start])
 
       Unleash.enabled?(:test1)
@@ -95,6 +98,7 @@ defmodule UnleashTest do
     end
 
     test "should emit telemetry with result on stop" do
+      Application.put_env(:unleash, :disable_telemetry, false)
       attach_telemetry_event([:unleash, :feature, :enabled?, :stop])
 
       Unleash.enabled?(:test1)
