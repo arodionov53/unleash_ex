@@ -28,8 +28,10 @@ defmodule Unleash.FeatureCompiler do
   def compile_all(features) do
     module_ast = generate_module(features)
 
-    # Purge old module if it exists
-    :code.purge(@compiled_module)
+    # soft_purge avoids killing processes still executing in the old module;
+    # if any process is mid-call it simply no-ops and :code.delete will
+    # move current → old safely (BEAM allows calling old code).
+    :code.soft_purge(@compiled_module)
     :code.delete(@compiled_module)
 
     Module.create(@compiled_module, module_ast, Macro.Env.location(__ENV__))
