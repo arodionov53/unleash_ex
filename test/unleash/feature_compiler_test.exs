@@ -236,6 +236,48 @@ defmodule Unleash.FeatureCompilerTest do
     end
   end
 
+  describe "concurrent recompilation safety" do
+    test "callers survive recompilation (soft_purge does not kill mid-call processes)" do
+      # Compile initial version
+      feature_v1 = %Feature{name: "hot_swap", enabled: true, strategies: []}
+      FeatureCompiler.compile_all([feature_v1])
+
+      # Spawn many processes that continuously call enabled? in a tight loop
+      caller_count = 20
+      iterations = 5_000
+      parent = self()
+
+      callers =
+        for i <- 1..caller_count do
+          spawn_link(fn ->
+            results =
+              for _ <- 1..iterations do
+                # This call executes in the caller's process — if :code.purge
+                # were used, the process would be killed mid-execution
+                Unleash.CompiledFeatures.enabled?("hot_swap", %{})
+              end
+
+            send(parent, {:done, i, Enum.all?(results, &(&1 in [true, false, nil]))})
+          end)
+        end
+
+      # Meanwhile, recompile repeatedly to trigger purge/swap
+      for _ <- 1..20 do
+        feature_v2 = %Feature{name: "hot_swap", enabled: true, strategies: []}
+        FeatureCompiler.compile_all([feature_v2])
+        Process.sleep(1)
+      end
+
+      # All caller processes should survive without being killed
+      for _ <- 1..caller_count do
+        assert_receive {:done, _i, true}, 5_000
+      end
+
+      # Verify no callers died (spawn_link would propagate the exit)
+      assert Process.alive?(self())
+    end
+  end
+
   describe "cleanup/1" do
     test "removes stale persistent_term entries" do
       features = [
