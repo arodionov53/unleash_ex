@@ -131,8 +131,7 @@ defmodule Unleash do
         default
 
       result ->
-        f = FeatureCompiler.get_feature(feature_name)
-        if f, do: Config.metrics_module_fast().add_metric({f, result})
+        Config.metrics_module_fast().add_metric_by_name(feature_name, result)
         result
     end
   end
