@@ -19,6 +19,7 @@ defmodule Unleash do
   @compile {:no_warn_undefined, Unleash.CompiledFeatures}
 
   alias Unleash.Config
+  alias Unleash.Feature
   alias Unleash.FeatureCompiler
   alias Unleash.Metrics
   alias Unleash.MetricsFast
@@ -116,22 +117,26 @@ defmodule Unleash do
     end
   end
 
-  # Fast path: no metadata allocation, no telemetry, minimal branching
+  # Fast path: no metadata allocation, no telemetry, minimal branching.
+  # Uses persistent_term + static Feature.enabled?/2 instead of the dynamic
+  # CompiledFeatures module — under high concurrency the static JIT-optimized
+  # code path is faster than dispatching through a hot-swapped module.
   defp enabled_fast(feature, context, default) do
     if Config.disable_client_fast() or not FeatureCompiler.compiled?() do
       default
     else
-      eval_compiled_fast(to_string(feature), context, default)
+      eval_feature_fast(to_string(feature), context, default)
     end
   end
 
-  defp eval_compiled_fast(feature_name, context, default) do
-    case Unleash.CompiledFeatures.enabled?(feature_name, context) do
+  defp eval_feature_fast(feature_name, context, default) do
+    case FeatureCompiler.get_feature(feature_name) do
       nil ->
         default
 
-      result ->
-        Config.metrics_module_fast().add_metric_by_name(feature_name, result)
+      loaded_feature ->
+        {result, _evaluations} = Feature.enabled?(loaded_feature, context)
+        Config.metrics_module_fast().add_metric({loaded_feature, result})
         result
     end
   end
