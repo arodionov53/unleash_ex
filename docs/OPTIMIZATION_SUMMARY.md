@@ -202,6 +202,39 @@ After the dynamic→static module fix (`55f87d2`), both `enabled?` and
 Biggest wins on early-exit paths (nonexistent/disabled features) where
 eliminated telemetry + config overhead was the dominant cost.
 
+### vs PR #23 baseline (`9f99f50`, pre-optimization)
+
+Comparison against the merge commit of PR #23 (Fix variant metrics) — the
+codebase before any performance work was done.
+
+#### `enabled?` — median latency (ns)
+
+| scenario             |   PR #23 | optimized | speedup  |
+|----------------------|---------:|----------:|----------|
+| nonexistent feature  |   28,630 |   **167** | **171×** |
+| disabled feature     |   62,580 |   **500** | **125×** |
+| default strategy     |   61,630 |   **500** | **123×** |
+| matching user        |   60,830 | **1,000** | **61×**  |
+
+#### `get_variant` — median latency (ns)
+
+| scenario             |   PR #23 | optimized | speedup  |
+|----------------------|---------:|----------:|----------|
+| nonexistent feature  |   27,880 |   **167** | **167×** |
+| no variants          |   75,580 |   **667** | **113×** |
+| with variants        |   72,210 | **1,125** | **64×**  |
+
+#### Memory per call (bytes)
+
+| scenario                   |    PR #23 | optimized | reduction  |
+|----------------------------|---------:|----------:|------------|
+| enabled?(matching user)    |   88,920 | **1,584** | **98.2%**  |
+| enabled?(nonexistent)      |   35,150 |    **88** | **99.7%**  |
+| get_variant(with variants) |  106,410 | **1,552** | **98.5%**  |
+| get_variant(nonexistent)   |   35,000 |    **88** | **99.7%**  |
+
+**60–170× faster, 98–99% less memory** vs the pre-optimization baseline.
+
 ---
 
 ## Configuration
