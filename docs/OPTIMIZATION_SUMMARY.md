@@ -168,6 +168,40 @@ test to confirm.*
 fix deployed in `55f87d2` — **re-deployment + load test needed** to get
 updated numbers.
 
+### Local micro-benchmark (single caller, `mix run --no-start`)
+
+After the dynamic→static module fix (`55f87d2`), both `enabled?` and
+`get_variant` are faster than main in single-caller benchmarks.
+
+#### `enabled?` — median latency (ns)
+
+| scenario             |  main | optimized | speedup |
+|----------------------|------:|----------:|---------|
+| nonexistent feature  |   417 |   **167** | **2.5×**  |
+| disabled feature     |   875 |   **500** | **1.75×** |
+| default strategy     |   875 |   **500** | **1.75×** |
+| matching user        | 1,334 | **1,000** | **1.33×** |
+
+#### `get_variant` — median latency (ns)
+
+| scenario             |  main | optimized | speedup |
+|----------------------|------:|----------:|---------|
+| nonexistent feature  |   420 |   **167** | **2.5×**  |
+| no variants          | 1,000 |   **667** | **1.5×**  |
+| with variants        | 1,540 | **1,125** | **1.37×** |
+
+#### Memory per call (bytes)
+
+| scenario                   |  main | optimized | reduction |
+|----------------------------|------:|----------:|-----------|
+| enabled?(matching user)    | 3,630 | **1,584** | **56%**   |
+| enabled?(nonexistent)      | 1,150 |    **88** | **92%**   |
+| get_variant(with variants) | 2,560 | **1,552** | **39%**   |
+| get_variant(nonexistent)   | 1,000 |    **88** | **91%**   |
+
+Biggest wins on early-exit paths (nonexistent/disabled features) where
+eliminated telemetry + config overhead was the dominant cost.
+
 ---
 
 ## Configuration
