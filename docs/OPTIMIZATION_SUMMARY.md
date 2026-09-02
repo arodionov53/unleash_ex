@@ -145,9 +145,11 @@ for `Feature.enabled?/2`.
 
 ### `enabled?` (p50, `pipe_bid_req` step duration in μs)
 
-*Note: measured before the dynamic→static module fix. Results used the
-`CompiledFeatures` dynamic dispatch which was slower under concurrency.
-Re-test pending with the current static `Feature.enabled?/2` path.*
+*Measured before commit `55f87d2` which replaced dynamic `CompiledFeatures`
+dispatch with static `Feature.enabled?/2` + persistent_term. The optimized
+path now follows the same pattern as `get_variant_fast` (which showed ~2–3×
+improvement), so similar gains are expected. Needs re-deployment and load
+test to confirm.*
 
 | concurrent calls |   0 |   1 |   8 |  16 |   32 |    64 |     80 |
 |------------------|----:|----:|----:|----:|-----:|------:|-------:|
@@ -162,8 +164,9 @@ Re-test pending with the current static `Feature.enabled?/2` path.*
 | **main**         | 951 | 951 | 951 | 952 |   979 | 11,609 | 20,676 |
 
 `get_variant`: **~2–3× improvement** at high concurrency (64–80 calls).
-`enabled?`: was slower with dynamic module dispatch; expected to match or
-beat main after the fix to use static `Feature.enabled?/2`.
+`enabled?`: above numbers used dynamic module dispatch (slower than main);
+fix deployed in `55f87d2` — **re-deployment + load test needed** to get
+updated numbers.
 
 ---
 
